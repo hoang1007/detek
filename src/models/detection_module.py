@@ -39,6 +39,8 @@ class DetectionModule(LightningModule):
             return self.detector.forward_test(images)
 
     def training_step(self, batch: BatchDataSample, batch_idx: int):
+        batch.to(self.device)
+
         loss_dict = self(batch.images, batch.bboxes, batch.labels)
         assert isinstance(loss_dict, Dict), "loss_dict must be a dict"
 
@@ -48,6 +50,8 @@ class DetectionModule(LightningModule):
         return loss
 
     def validation_step(self, batch: BatchDataSample, batch_idx: int):
+        batch.to(self.device)
+
         pred_bboxes, pred_labels, pred_scores = self(batch.images)
 
         preds = []
@@ -76,6 +80,8 @@ class DetectionModule(LightningModule):
         )
 
     def test_step(self, batch: BatchDataSample, batch_idx: int):
+        batch.to(self.device)
+
         return self(batch.images)
 
     def configure_optimizers(self):

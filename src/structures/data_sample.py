@@ -16,3 +16,8 @@ class BatchDataSample:
         self.labels = torch.stack([sample.labels for sample in samples], dim=0)
 
         self.batch_size = len(samples)
+
+    def to(self, device: torch.device):
+        self.images = self.images.to(device)
+        self.bboxes = self.bboxes.to(device)
+        self.labels = self.labels.to(device)
