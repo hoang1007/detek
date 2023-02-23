@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import albumentations as A
 import numpy as np
 import torch
@@ -36,15 +38,21 @@ VOC_CLASSES = [
 
 
 class VOCDataset(BaseDataset):
-    def __init__(self, root="data", year="2007", image_set="trainval"):
+    def __init__(
+        self, img_size: Tuple[int, int] = (640, 640), root="data", year="2007", image_set="train"
+    ):
         super().__init__(VOC_CLASSES)
-
         if image_set == "train":
             self.transform = A.Compose(
                 (
                     A.HorizontalFlip(p=0.5),
-                    A.Normalize(mean=VOC_MEAN, std=VOC_STD),
                     A.RandomBrightnessContrast(p=0.2),
+                    A.LongestMaxSize(max_size=max(img_size), p=1.0),
+                    A.RandomSizedBBoxSafeCrop(
+                        width=img_size[0], height=img_size[1], erosion_rate=0.0, p=0.2
+                    ),
+                    A.Normalize(mean=VOC_MEAN, std=VOC_STD),
+                    A.PadIfNeeded(min_height=img_size[1], min_width=img_size[0], value=0, p=1.0),
                     ToTensorV2(),
                 ),
                 bbox_params=A.BboxParams(format="pascal_voc", label_fields=["labels"]),
@@ -65,8 +73,6 @@ class VOCDataset(BaseDataset):
             download=True,
         )
 
-        self._class2idx = {name: idx for idx, name in enumerate(VOC_CLASSES)}
-
     def __getitem__(self, idx):
         img, info = self._data[idx]
         img = np.array(img)
@@ -78,11 +84,12 @@ class VOCDataset(BaseDataset):
             bndbox = [int(k) for k in obj_info["bndbox"].values()]
 
             gt_boxes.append(bndbox)
-            labels.append(self._class2idx[label_name])
+            labels.append(self.get_class_idx(label_name))
 
         transformed = self.transform(image=img, bboxes=gt_boxes, labels=labels)
 
         img = transformed["image"]
+
         gt_boxes = torch.tensor(transformed["bboxes"], dtype=torch.float32)
         labels = torch.tensor(transformed["labels"], dtype=torch.long)
 

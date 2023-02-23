@@ -59,7 +59,7 @@ class DetectionModule(LightningModule):
 
         preds = []
         gts = []
-        for i in range(pred_bboxes.shape[0]):
+        for i in range(len(pred_bboxes)):
             preds.append(
                 {
                     "boxes": pred_bboxes[i],
@@ -68,6 +68,7 @@ class DetectionModule(LightningModule):
                 }
             )
 
+        for i in range(len(batch.bboxes)):
             gts.append(
                 {
                     "boxes": batch.bboxes[i],

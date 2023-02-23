@@ -29,7 +29,7 @@ model:
     eta_min: 0.00001
 
 data:
-  batch_size: 1
+  batch_size: 4
 
 logger:
   wandb:

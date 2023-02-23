@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import List, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -34,24 +34,30 @@ class RCNN(nn.Module):
             nn.Dropout(dropout),
         )
 
-        self.roi_cls = nn.Linear(4096, self.num_classes)
-        self.roi_reg = nn.Linear(4096, self.num_classes * 4)
+        self.roi_cls = nn.Linear(hidden_dim, self.num_classes)
+        self.roi_reg = nn.Linear(hidden_dim, self.num_classes * 4)
 
         self.roi_align = ops.RoIAlign((roi_size, roi_size), spatial_scale, sampling_ratio=-1)
         # self.roi_align = ops.RoIPool(roi_size, spatial_scale=spatial_scale)
         self.proposal_target = proposal_target(self.num_classes)  # type: ignore
 
     def forward(
-        self, feature_map: torch.Tensor, rois: torch.Tensor
+        self, feature_map: torch.Tensor, proposals: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # feature_map.shape = (B, C, H, W)
-        # rois.shape = (N, 4)
-        assert len(rois.shape) == 2 and rois.size(1) == 4
+        """
+        Args:
+            feature_map: Shape (B, C, H, W)
+            proposals: List of shape (N, 4)
+        """
 
-        # pooled.shape = (N, C, roi_size, roi_size)
-        pooled = self.roi_align(feature_map, [rois])
+        batch_size = feature_map.size(0)
 
-        pooled = pooled.flatten(start_dim=1)
+        pooled = self.roi_align(feature_map, proposals)
+
+        # (B * N, C, roi_size, roi_size) -> (B, N, C * roi_size * roi_size)
+        pooled = torch.flatten(pooled, start_dim=1)
+        pooled = pooled.view(batch_size, -1, pooled.size(-1))
+
         fc_out = self.fc(pooled)
 
         roi_bbox_pred = self.roi_reg(fc_out)
@@ -62,22 +68,29 @@ class RCNN(nn.Module):
     def forward_train(
         self,
         feature_map: torch.Tensor,
-        rois: torch.Tensor,
-        gt_boxes: torch.Tensor,
+        proposals: List[torch.Tensor],
+        gt_boxes: List[torch.Tensor],
         gt_labels: torch.Tensor,
     ):
         """
         Args:
+            feature_map: Shape (B, C, H, W)
+            proposals: List of shape (N, 4)
+            gt_boxes: List of shape (M, 4)
+            gt_labels: List of shape (M,)
 
         """
-        gt_boxes = gt_boxes[0]
-        gt_labels = gt_labels[0]
         beta = 10
 
         roi_bbox_targets, sampled_rois, roi_labels = self.proposal_target(
-            rois, gt_boxes, gt_labels
+            proposals, gt_boxes, gt_labels
         )
         roi_bbox_pred, roi_cls_scores = self.forward(feature_map, sampled_rois)
+
+        roi_bbox_targets = roi_bbox_targets.view(-1, self.num_classes * 4)
+        roi_labels = roi_labels.view(-1)
+        roi_bbox_pred = roi_bbox_pred.view(-1, self.num_classes * 4)
+        roi_cls_scores = roi_cls_scores.view(-1, self.num_classes)
 
         cls_loss = F.cross_entropy(roi_cls_scores, roi_labels, ignore_index=-1)
 

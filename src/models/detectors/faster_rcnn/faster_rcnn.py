@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple
 
 import torch
 from torch import nn
@@ -26,28 +26,33 @@ class FasterRCNN(BaseDetector):
         h, w = images.shape[-2:]
         scale = round(feature_map.size(-1) / w)
 
-        metadata = ImageInfo(w, h, scale)
+        img_info = ImageInfo(w, h, scale)
 
-        return feature_map, metadata
+        return feature_map, img_info
 
     def forward(self, images):
-        assert images.size(0) == 1, "Only support batch size = 1"
-        feature_map, metadata = self.backbone_forward(images)
+        """
+        Args:
+            images: Shape (B, C, H, W)
+        """
 
-        rpn_bbox_pred, rpn_cls_scores, rpn_rois, anchors = self.rpn(feature_map, metadata)
-        roi_bbox_pred, roi_cls_scores = self.rcnn(feature_map, rpn_rois)
+        feature_map, img_info = self.backbone_forward(images)
+
+        rpn_bbox_pred, rpn_cls_scores, proposals, anchors = self.rpn(feature_map, img_info)
+        roi_bbox_pred, roi_cls_scores = self.rcnn(feature_map, proposals)
 
         return {
             "rpn_bbox_pred": rpn_bbox_pred,
             "rpn_cls_scores": rpn_cls_scores,
             "roi_bbox_pred": roi_bbox_pred,
             "roi_cls_scores": roi_cls_scores,
-            "rpn_rois": rpn_rois,
+            "rpn_proposals": proposals,
             "anchors": anchors,
         }
 
-    def forward_train(self, images: torch.Tensor, gt_boxes: torch.Tensor, gt_labels: torch.Tensor):
-        assert images.size(0) == 1, "Only support batch size = 1"
+    def forward_train(
+        self, images: torch.Tensor, gt_boxes: List[torch.Tensor], gt_labels: torch.Tensor
+    ):
         feature_map, metadata = self.backbone_forward(images)
 
         rpn_losses, rois = self.rpn.forward_train(feature_map, gt_boxes, metadata)
@@ -55,37 +60,45 @@ class FasterRCNN(BaseDetector):
 
         return {**rpn_losses, **roi_losses}
 
-    def forward_test(
-        self, images: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward_test(self, images: torch.Tensor):
         num_classes = self.rcnn.num_classes
-        delta_means = (0, 0, 0, 0)
+        num_images = images.shape[0]
+
+        delta_means = (0.0, 0.0, 0.0, 0.0)
         delta_stds = (0.1, 0.1, 0.2, 0.2)
 
-        delta_means = (
-            torch.tensor(delta_means).view(1, -1).to(images.device).repeat(1, num_classes)
-        )
-        delta_stds = torch.tensor(delta_stds).view(1, -1).to(images.device).repeat(1, num_classes)
+        delta_means = torch.tensor(delta_means, device=images.device).repeat(1, 1, num_classes, 1)
+        delta_stds = torch.tensor(delta_stds, device=images.device).repeat(1, 1, num_classes, 1)
 
         outputs = self(images)
 
-        roi_bbox_pred = outputs["roi_bbox_pred"] * delta_stds + delta_means
-        roi_bbox_pred = roi_bbox_pred.view(-1, num_classes, 4)
+        roi_bbox_pred = outputs["roi_bbox_pred"].view(num_images, -1, num_classes, 4)
+        roi_bbox_pred = roi_bbox_pred * delta_stds + delta_means
 
-        rois = outputs["rpn_rois"].view(-1, 1, 4).expand_as(roi_bbox_pred)
+        rois = torch.stack(outputs["rpn_proposals"], dim=0).unsqueeze_(2).expand_as(roi_bbox_pred)
 
         pred_boxes = bbox_transform_inv(rois.reshape(-1, 4), roi_bbox_pred.reshape(-1, 4))
 
         image_height, image_width = images.shape[-2:]
         pred_boxes = clip_boxes(pred_boxes, image_height, image_width)
 
-        pred_boxes = pred_boxes.view(-1, num_classes * 4)
-
+        pred_boxes = pred_boxes.view(num_images, -1, num_classes, 4)
         box_probs = torch.softmax(outputs["roi_cls_scores"], dim=-1)
 
-        pred_boxes, pred_labels, box_scores = self._suppress(pred_boxes, box_probs, num_classes)
+        batch_pred_boxes: List[torch.Tensor] = []
+        batch_pred_labels: List[torch.Tensor] = []
+        batch_box_scores: List[torch.Tensor] = []
 
-        return pred_boxes, pred_labels, box_scores
+        for i in range(num_images):
+            pred_boxes_, pred_labels_, box_scores_ = self._suppress(
+                pred_boxes[i], box_probs[i], num_classes
+            )
+
+            batch_pred_boxes.append(pred_boxes_)
+            batch_pred_labels.append(pred_labels_)
+            batch_box_scores.append(box_scores_)
+
+        return batch_pred_boxes, batch_pred_labels, batch_box_scores
 
     def set_val_mode(self, mode: str = "EVAL"):
         """
@@ -109,8 +122,6 @@ class FasterRCNN(BaseDetector):
         boxlist = []
         labellist = []
         scorelist = []
-
-        pred_boxes = pred_boxes.reshape(-1, num_classes, 4)
 
         for clazz in range(1, num_classes):  # ignore background
             boxes_ = pred_boxes[:, clazz]

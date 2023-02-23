@@ -46,34 +46,55 @@ class ProposalLayer(nn.Module):
         anchors: torch.Tensor,
         metadata: ImageInfo,
     ):
-        # if rpn_bbox_pred.requires_grad:
-        #     rpn_bbox_pred = rpn_bbox_pred.detach()
+        """
+        Args:
+            rpn_bbox_pred: Deltas of proposals from anchors. Shape (B, N, 4)
+            objectness: Objectness scores of proposals. Shape (B, N)
+            anchors: Anchors. Shape (N, 4)
+            metadata: ImageInfo
 
+        Returns:
+            proposals: List of proposals per batch. List of shape (M, 4)
+        """
         pre_nms_topN, post_nms_topN = self._get_nms_topN()
+
+        batch_size = rpn_bbox_pred.size(0)
+
+        rpn_bbox_pred = rpn_bbox_pred.view(-1, 4)  # Shape (B * N, 4)
+        anchors = anchors.repeat(batch_size, 1)  # Shape (B * N, 4)
 
         proposals = bbox_transform_inv(anchors, rpn_bbox_pred)
         proposals = clip_boxes(proposals, metadata.height, metadata.width)
+        proposals = proposals.view(batch_size, -1, 4)
 
-        keep = self._filter_boxes(proposals, self.min_box_size)
-        proposals = proposals[keep]
-        objectness = objectness[keep]
+        batch_proposals = []
 
-        objectness, order = torch.sort(objectness, descending=True)
+        for i in range(batch_size):
+            nb_proposals = proposals[i]
+            nb_objectness = objectness[i]
 
-        if pre_nms_topN > 0:
-            order = order[:pre_nms_topN]
-            objectness = objectness[:pre_nms_topN]
+            keep = self._filter_boxes(nb_proposals, self.min_box_size)
+            nb_proposals = nb_proposals[keep]
+            nb_objectness = nb_objectness[keep]
 
-        proposals = proposals[order]
+            nb_objectness, order = torch.sort(nb_objectness, descending=True)
 
-        nms_keep_ids = ops.nms(proposals, objectness, self.nms_thresh)
+            if pre_nms_topN > 0:
+                order = order[:pre_nms_topN]
+                nb_objectness = nb_objectness[:pre_nms_topN]
 
-        if post_nms_topN > 0:
-            nms_keep_ids = nms_keep_ids[:post_nms_topN]
+            nb_proposals = nb_proposals[order]
 
-        proposals = proposals[nms_keep_ids]
+            nms_keep_ids = ops.nms(nb_proposals, nb_objectness, self.nms_thresh)
 
-        return proposals
+            if post_nms_topN > 0:
+                nms_keep_ids = nms_keep_ids[:post_nms_topN]
+
+            nb_proposals = nb_proposals[nms_keep_ids]
+
+            batch_proposals.append(nb_proposals)
+
+        return batch_proposals
 
     def _filter_boxes(self, boxes: torch.Tensor, min_size: int):
         """
@@ -84,6 +105,6 @@ class ProposalLayer(nn.Module):
         ws = boxes[:, 2] - boxes[:, 0]
         hs = boxes[:, 3] - boxes[:, 1]
 
-        keep = torch.where(torch.logical_and(ws >= min_size, hs >= min_size))[0]
+        keep = torch.logical_and(ws >= min_size, hs >= min_size)
 
         return keep

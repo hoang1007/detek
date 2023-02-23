@@ -107,7 +107,7 @@ def bbox_transform_inv(
     tar_hs = torch.exp(th) * hs
 
     tar_boxes = torch.stack((tar_cxs, tar_cys, tar_ws, tar_hs), dim=1)
-    tar_boxes = cxcywh2xyxy(tar_boxes)
+    tar_boxes = cxcywh2xyxy(tar_boxes, inplace=True)
 
     return tar_boxes
 

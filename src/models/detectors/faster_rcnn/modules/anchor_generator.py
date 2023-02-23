@@ -61,7 +61,7 @@ class AnchorGenerator(nn.Module):
         return base_anchors.round()
 
     def forward(self, feature_map: torch.Tensor):
-        batch_size, _, feat_height, feat_width = feature_map.shape
+        feat_height, feat_width = feature_map.shape[-2:]
 
         shiftx = torch.arange(0, feat_width, device=feature_map.device) * self.feat_stride
         shifty = torch.arange(0, feat_height, device=feature_map.device) * self.feat_stride

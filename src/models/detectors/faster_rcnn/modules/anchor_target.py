@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 
 from structures import ImageInfo
@@ -15,16 +17,17 @@ class AnchorTargetGenerator:
         negative_overlap: float = 0.3,
         fg_fraction: float = 0.5,
     ):
-        """Gán nhãn cho từng anchor.
+        """Produce bbox targets and objectness labels for RPN.
 
         Args:
-            anchors: Shape (N, 4)
-            gt_boxes: Hộp chân trị của các đối tượng trong ảnh. Shape (K, 4)
-            im_info: Thông tin về ảnh ở định dạng (H, W, scale)
-        Returns:
-            bbox_targets: Transform của anchors và gt_boxes. Shape (N, 4)
-            labels: Nhãn nhị phân của từng hộp. Shape (N,)
+            batch_size: Number of anchors to sample for training
+            allowed_border: If an anchor is too close to the border, ignore it
+            clobber_positives: If an anchor has IoU > positive_overlap with any gt_box, ignore it
+            positive_overlap: Threshold for an anchor to be a positive
+            negative_overlap: Threshold for an anchor to be a negative
+            fg_fraction: Fraction of anchors that are labeled as foreground
         """
+
         self._allowed_border = allowed_border
         self.batch_size = batch_size
         self.clobber_positives = clobber_positives
@@ -32,25 +35,45 @@ class AnchorTargetGenerator:
         self.negative_overlap = negative_overlap
         self.fg_fraction = fg_fraction
 
-    def __call__(self, anchors: torch.Tensor, gt_boxes: torch.Tensor, metadata: ImageInfo):
+    def __call__(self, anchors: torch.Tensor, gt_boxes: List[torch.Tensor], img_info: ImageInfo):
+        """
+        Args:
+            anchors: Anchors on the images Shape (N, 4)
+            gt_boxes: The ground-truth bounding boxes of objects on the images. List of shape (K, 4)
+            im_info: The image info
+
+        Returns:
+            bbox_targets: Deltas of assigned ground-truth bounding boxes from anchors. Shape (B, N, 4)
+            labels: Objectness labels for anchors. Shape (B, N)
+        """
         A = anchors.size(0)
 
-        anchors, keep_ids = self._get_inside_anchors(anchors, metadata.height, metadata.width)
+        anchors, keep_ids = self._get_inside_anchors(anchors, img_info.height, img_info.width)
 
-        bbox_targets, labels = self._mklabels(anchors, gt_boxes)
+        batched_bbox_targets = []
+        batched_labels = []
 
-        bbox_targets = self._unmap(bbox_targets, A, keep_ids, fill=0)
-        labels = self._unmap(labels, A, keep_ids, fill=-1)
+        for boxes in gt_boxes:
+            bbox_targets, labels = self._mklabels(anchors, boxes)
 
-        return bbox_targets, labels
+            bbox_targets = self._unmap(bbox_targets, A, keep_ids, fill=0)
+            labels = self._unmap(labels, A, keep_ids, fill=-1)
+
+            batched_bbox_targets.append(bbox_targets)
+            batched_labels.append(labels)
+
+        batched_bbox_targets = torch.stack(batched_bbox_targets, dim=0)
+        batched_labels = torch.stack(batched_labels, dim=0)
+
+        return batched_bbox_targets, batched_labels
 
     def _get_inside_anchors(self, anchors: torch.Tensor, height: int, width: int):
-        inside_ids = torch.where(
+        inside_ids = (
             (anchors[:, 0] >= -self._allowed_border)
             & (anchors[:, 1] >= -self._allowed_border)
             & (anchors[:, 2] < width + self._allowed_border)
             & (anchors[:, 3] < height + self._allowed_border)
-        )[0]
+        )
 
         return anchors[inside_ids], inside_ids
 
@@ -61,6 +84,7 @@ class AnchorTargetGenerator:
         assert A > 0, "Num of anchors must be greater than 0"
         assert G > 0, "Num of ground-truth boxes must be greater than 0"
 
+        bbox_targets = torch.zeros((A, 4), dtype=torch.float32, device=anchors.device)
         labels = torch.empty(A, dtype=torch.long, device=anchors.device).fill_(-1)
 
         ious = bbox_iou(anchors, gt_boxes)  # shape (A, G)
@@ -102,7 +126,8 @@ class AnchorTargetGenerator:
             disable_ids = bg_ids[random_choice(bg_ids, bg_ids.size(0) - num_bg, replacement=False)]
             labels[disable_ids] = -1
 
-        bbox_targets = bbox_transform(anchors, gt_boxes[argmax_ious])
+        keep_ids = torch.hstack((fg_ids, bg_ids))
+        bbox_targets[keep_ids] = bbox_transform(anchors[keep_ids], gt_boxes[argmax_ious][keep_ids])
 
         return bbox_targets, labels
 

@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -44,46 +44,61 @@ class RPNLayer(nn.Module):
         init_weight(self.classifier, std=0.01)
         init_weight(self.regressor, std=0.01)
 
-    def forward(self, feature_map: torch.Tensor, iminfo: ImageInfo):
+    def forward(self, feature_map: torch.Tensor, img_info: ImageInfo):
         """
         Args:
             feature_map: Shape (B, C, H, W)
-            iminfo: ImageInfo
-        """
-        anchors = self.anchor_generator(feature_map)
+            img_info: ImageInfo
 
-        fm = torch.relu(self.conv(feature_map))
+        Returns:
+            bbox_pred: Shape (B, N, 4)
+            cls_scores: Shape (B, N, 2)
+            proposals: List of proposals per batch. List of shape (M, 4)
+        """
+        batch_size = feature_map.size(0)
+
+        anchors = self.anchor_generator(feature_map)  # shape (A, 4)
+
+        fm = F.relu(self.conv(feature_map), inplace=True)
 
         cls_scores = self.classifier(fm)  # shape (B, A * 2, H, W)
         bbox_pred = self.regressor(fm)  # shape (B, A * 4, H, W)
 
-        cls_scores = cls_scores.permute(0, 2, 3, 1).reshape(-1, 2)
-        bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4)
+        cls_scores = cls_scores.permute(0, 2, 3, 1).reshape(batch_size, -1, 2)
+        bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 4)
 
-        cls_probs = torch.softmax(cls_scores.detach(), dim=1)
-        objectness_scores = cls_probs[:, 1]
+        cls_probs = F.softmax(cls_scores.detach(), dim=1)
+        objectness_scores = cls_probs[:, :, 1]
 
-        rois = self.proposal_layer(bbox_pred, objectness_scores, anchors, iminfo)
+        proposals = self.proposal_layer(bbox_pred, objectness_scores, anchors, img_info)
 
-        return bbox_pred, cls_scores, rois, anchors
+        return bbox_pred, cls_scores, proposals, anchors
 
     def forward_train(
         self,
         feature_map: torch.Tensor,
-        gt_bboxes: torch.Tensor,
+        gt_bboxes: List[torch.Tensor],
         metadata: ImageInfo,
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+    ) -> Tuple[Dict[str, torch.Tensor], List[torch.Tensor]]:
         """
         Args:
             feature_map: Shape (B, C, H, W)
-            gt_bboxes: Shape (B, N, 4)
+            gt_bboxes: List of shape (N, 4)
             metadata: ImageInfo
+
+        Returns:
+            losses: Dict of losses
+            proposals: List of proposals per batch. List of shape (M, 4)
         """
         beta = 10
 
-        gt_bboxes = gt_bboxes[0]  # only support batch size 1
-        bbox_pred, cls_scores, rois, anchors = self.forward(feature_map, metadata)
+        bbox_pred, cls_scores, proposals, anchors = self.forward(feature_map, metadata)
         rpn_bbox_targets, rpn_labels = self.anchor_target(anchors, gt_bboxes, metadata)
+
+        bbox_pred = bbox_pred.view(-1, 4)
+        cls_scores = cls_scores.view(-1, 2)
+        rpn_bbox_targets = rpn_bbox_targets.view(-1, 4)
+        rpn_labels = rpn_labels.view(-1)
 
         cls_loss = F.cross_entropy(cls_scores, rpn_labels, ignore_index=-1)
 
@@ -99,4 +114,4 @@ class RPNLayer(nn.Module):
 
         reg_loss = beta * reg_loss / sampled_mask.sum()
 
-        return {"loss_rpn_cls": cls_loss, "loss_rpn_reg": reg_loss}, rois
+        return {"loss_rpn_cls": cls_loss, "loss_rpn_reg": reg_loss}, proposals
