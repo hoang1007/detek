@@ -1,0 +1,10 @@
+_target_: src.models.detection_module.DetectionModule
+
+detector: null
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.001
+  weight_decay: 0.001
+
+scheduler: null

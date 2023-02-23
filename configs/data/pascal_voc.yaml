@@ -1,0 +1,6 @@
+defaults:
+  - default.yaml
+
+data:
+  _target_: src.data.datasets.VOCDataset
+  image_set: trainval
