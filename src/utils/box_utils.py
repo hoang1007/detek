@@ -1,10 +1,10 @@
 import math
+
 import torch
 
 
 def xyxy2cxcywh(boxes: torch.Tensor, inplace: bool = False):
-    """
-    Transform boxes from `(x_tl, y_tl, x_br, y_br)` format to `(x_ctr, y_ctr, w, h)` format
+    """Transform boxes from `(x_tl, y_tl, x_br, y_br)` format to `(x_ctr, y_ctr, w, h)` format.
 
     Args:
         boxes (Tensor): boxes in `(x_tl, y_tl, x_br, y_br)` format. Shape (N, 4)
@@ -29,8 +29,7 @@ def xyxy2cxcywh(boxes: torch.Tensor, inplace: bool = False):
 
 
 def cxcywh2xyxy(boxes: torch.Tensor, inplace: bool = False):
-    """
-    Transform boxes from `(x_ctr, y_ctr, w, h)` format to `(x_tl, y_tl, x_br, y_br)` format
+    """Transform boxes from `(x_ctr, y_ctr, w, h)` format to `(x_tl, y_tl, x_br, y_br)` format.
 
     Args:
         boxes (Tensor): boxes in `(x_ctr, y_ctr, w, h)` format. Shape (N, 4)
@@ -58,8 +57,7 @@ def cxcywh2xyxy(boxes: torch.Tensor, inplace: bool = False):
 
 
 def bbox_transform(src_boxes: torch.Tensor, tar_boxes: torch.Tensor):
-    """
-    Transform the target boxes to the offset space of the source boxes.
+    """Transform the target boxes to the offset space of the source boxes.
 
     Args:
         src_boxes: Source boxes. Boxes in `(x_tl, y_tl, x_br, y_br)` format. Shape (N, 4)
@@ -86,8 +84,7 @@ def bbox_transform(src_boxes: torch.Tensor, tar_boxes: torch.Tensor):
 def bbox_transform_inv(
     src_boxes: torch.Tensor, tar_deltas: torch.Tensor, clamp_thresh=math.log(1000 / 16)
 ):
-    """
-    Inverse transform the target boxes to the offset space of the source boxes.
+    """Inverse transform the target boxes to the offset space of the source boxes.
 
     Args:
         src_boxes: Source boxes. Boxes in `(x_tl, y_tl, x_br, y_br)` format. Shape (N, 4)
@@ -116,8 +113,7 @@ def bbox_transform_inv(
 
 
 def compute_box_areas(boxes: torch.Tensor):
-    """
-    Compute the area of boxes.
+    """Compute the area of boxes.
 
     Args:
         boxes: Boxes in `(x_tl, y_tl, x_br, y_br)` format. Shape (N, 4)
@@ -132,8 +128,7 @@ def compute_box_areas(boxes: torch.Tensor):
 
 
 def bbox_iou(boxes: torch.Tensor, query_boxes: torch.Tensor):
-    """
-    Compute the Intersection over Union of two set of boxes.
+    """Compute the Intersection over Union of two set of boxes.
 
     Parameters
         boxes: Boxes in `(x_tl, y_tl, x_br, y_br)` format. Shape (N, 4)
@@ -165,8 +160,7 @@ def bbox_iou(boxes: torch.Tensor, query_boxes: torch.Tensor):
 
 
 def clip_boxes(boxes: torch.Tensor, height: float, width: float):
-    """
-    Clip the boxes to the image size.
+    """Clip the boxes to the image size.
 
     Args:
         boxes: Boxes in `(x_tl, y_tl, x_br, y_br)` format. Shape (N, 4)

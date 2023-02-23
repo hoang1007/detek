@@ -1,11 +1,12 @@
 from typing import Dict, Optional
+
 import torch
 from pytorch_lightning import LightningModule
 from torch import optim
-
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 from structures import BatchDataSample
+
 from .detectors import BaseDetector
 
 
@@ -44,7 +45,9 @@ class DetectionModule(LightningModule):
         loss_dict = self(batch.images, batch.bboxes, batch.labels)
         assert isinstance(loss_dict, Dict), "loss_dict must be a dict"
 
-        self.log_dict(loss_dict, prog_bar=True, on_epoch=True, on_step=False, batch_size=batch.batch_size)
+        self.log_dict(
+            loss_dict, prog_bar=True, on_epoch=True, on_step=False, batch_size=batch.batch_size
+        )
 
         loss = sum(loss_dict.values())
         return loss
@@ -75,9 +78,7 @@ class DetectionModule(LightningModule):
         self.ap_metric.update(preds, gts)
 
     def validation_epoch_end(self, outputs):
-        self.log(
-            "mAP", self.ap_metric.compute(), prog_bar=True, on_epoch=True, on_step=False
-        )
+        self.log("mAP", self.ap_metric.compute(), prog_bar=True, on_epoch=True, on_step=False)
 
     def test_step(self, batch: BatchDataSample, batch_idx: int):
         batch.to(self.device)

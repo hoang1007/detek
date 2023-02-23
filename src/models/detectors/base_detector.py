@@ -1,4 +1,5 @@
 from typing import Dict, Tuple
+
 import torch
 from torch import nn
 
@@ -7,8 +8,7 @@ class BaseDetector(nn.Module):
     def forward_train(
         self, images: torch.Tensor, gt_boxes: torch.Tensor, gt_labels: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass during training.
+        """Forward pass during training.
 
         Args:
             images: Tensor of shape (N, C, H, W) containing images.
@@ -23,8 +23,7 @@ class BaseDetector(nn.Module):
     def forward_test(
         self, images: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Forward pass during testing.
+        """Forward pass during testing.
 
         Args:
             images: Tensor of shape (N, C, H, W) containing images.

@@ -1,6 +1,6 @@
 import torch
 
-from utils.box_utils import bbox_transform, bbox_iou
+from utils.box_utils import bbox_iou, bbox_transform
 from utils.functional import random_choice
 
 
@@ -17,9 +17,8 @@ class ProposalTargetGenerator:
         bbox_normalize_means: torch.Tensor,
         bbox_normalize_stds: torch.Tensor,
     ):
-        """
-        Gán nhãn cho các RoI và tạo ra các bbox_targets phục vụ cho việc huấn luyện Proposal Layer.
-        """
+        """Gán nhãn cho các RoI và tạo ra các bbox_targets phục vụ cho việc huấn luyện Proposal
+        Layer."""
 
         self.num_classes = num_classes
         self.use_gt = use_gt
@@ -62,9 +61,9 @@ class ProposalTargetGenerator:
         roi_labels = gt_labels[gt_assignment]
 
         fg_ids = torch.where(max_ious >= self.fg_thesh)[0]
-        bg_ids = torch.where(
-            (max_ious < self.bg_thresh_high) & (max_ious >= self.bg_thresh_low)
-        )[0]
+        bg_ids = torch.where((max_ious < self.bg_thresh_high) & (max_ious >= self.bg_thresh_low))[
+            0
+        ]
 
         if fg_ids.numel() > 0 and bg_ids.numel() > 0:
             fg_rois_per_img = min(fg_rois_per_img, fg_ids.numel())
@@ -91,9 +90,7 @@ class ProposalTargetGenerator:
 
         sampled_rois = rois[keep_ids].contiguous()
 
-        bbox_targets = self._compute_targets(
-            sampled_rois, gt_boxes[gt_assignment[keep_ids]]
-        )
+        bbox_targets = self._compute_targets(sampled_rois, gt_boxes[gt_assignment[keep_ids]])
 
         return bbox_targets, roi_labels, sampled_rois
 

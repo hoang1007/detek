@@ -1,4 +1,5 @@
 from typing import List
+
 from torch.utils.data import Dataset
 
 from structures import DataSample

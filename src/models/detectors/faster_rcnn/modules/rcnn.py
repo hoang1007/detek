@@ -1,11 +1,13 @@
-from typing import Tuple, Dict, Any
+from typing import Any, Dict, Tuple
+
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 from torchvision import ops
 
-from .proposal_target import ProposalTargetGenerator
 from utils.functional import init_weight
+
+from .proposal_target import ProposalTargetGenerator
 
 
 class RCNN(nn.Module):
@@ -35,11 +37,9 @@ class RCNN(nn.Module):
         self.roi_cls = nn.Linear(4096, self.num_classes)
         self.roi_reg = nn.Linear(4096, self.num_classes * 4)
 
-        self.roi_align = ops.RoIAlign(
-            (roi_size, roi_size), spatial_scale, sampling_ratio=-1
-        )
+        self.roi_align = ops.RoIAlign((roi_size, roi_size), spatial_scale, sampling_ratio=-1)
         # self.roi_align = ops.RoIPool(roi_size, spatial_scale=spatial_scale)
-        self.proposal_target = proposal_target(self.num_classes) # type: ignore
+        self.proposal_target = proposal_target(self.num_classes)  # type: ignore
 
     def forward(
         self, feature_map: torch.Tensor, rois: torch.Tensor
@@ -99,7 +99,4 @@ class RCNN(nn.Module):
         init_weight(self.roi_reg, std=0.01)
 
         for model in self.fc:
-            try:
-                init_weight(model, std=0.01)
-            except:
-                continue
+            init_weight(model, std=0.01)

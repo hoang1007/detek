@@ -1,12 +1,14 @@
 from typing import Tuple
+
 import torch
 from torch import nn
 from torchvision import ops
 
-from ..base_detector import BaseDetector
-from .modules import RPNLayer, RCNN
 from structures import ImageInfo
 from utils.box_utils import bbox_transform_inv, clip_boxes
+
+from ..base_detector import BaseDetector
+from .modules import RCNN, RPNLayer
 
 
 class FasterRCNN(BaseDetector):
@@ -32,9 +34,7 @@ class FasterRCNN(BaseDetector):
         assert images.size(0) == 1, "Only support batch size = 1"
         feature_map, metadata = self.backbone_forward(images)
 
-        rpn_bbox_pred, rpn_cls_scores, rpn_rois, anchors = self.rpn(
-            feature_map, metadata
-        )
+        rpn_bbox_pred, rpn_cls_scores, rpn_rois, anchors = self.rpn(feature_map, metadata)
         roi_bbox_pred, roi_cls_scores = self.rcnn(feature_map, rpn_rois)
 
         return {
@@ -46,9 +46,7 @@ class FasterRCNN(BaseDetector):
             "anchors": anchors,
         }
 
-    def forward_train(
-        self, images: torch.Tensor, gt_boxes: torch.Tensor, gt_labels: torch.Tensor
-    ):
+    def forward_train(self, images: torch.Tensor, gt_boxes: torch.Tensor, gt_labels: torch.Tensor):
         assert images.size(0) == 1, "Only support batch size = 1"
         feature_map, metadata = self.backbone_forward(images)
 
@@ -65,17 +63,9 @@ class FasterRCNN(BaseDetector):
         delta_stds = (0.1, 0.1, 0.2, 0.2)
 
         delta_means = (
-            torch.tensor(delta_means)
-            .view(1, -1)
-            .to(images.device)
-            .repeat(1, num_classes)
+            torch.tensor(delta_means).view(1, -1).to(images.device).repeat(1, num_classes)
         )
-        delta_stds = (
-            torch.tensor(delta_stds)
-            .view(1, -1)
-            .to(images.device)
-            .repeat(1, num_classes)
-        )
+        delta_stds = torch.tensor(delta_stds).view(1, -1).to(images.device).repeat(1, num_classes)
 
         outputs = self(images)
 
@@ -84,9 +74,7 @@ class FasterRCNN(BaseDetector):
 
         rois = outputs["rpn_rois"].view(-1, 1, 4).expand_as(roi_bbox_pred)
 
-        pred_boxes = bbox_transform_inv(
-            rois.reshape(-1, 4), roi_bbox_pred.reshape(-1, 4)
-        )
+        pred_boxes = bbox_transform_inv(rois.reshape(-1, 4), roi_bbox_pred.reshape(-1, 4))
 
         image_height, image_width = images.shape[-2:]
         pred_boxes = clip_boxes(pred_boxes, image_height, image_width)
@@ -95,9 +83,7 @@ class FasterRCNN(BaseDetector):
 
         box_probs = torch.softmax(outputs["roi_cls_scores"], dim=-1)
 
-        pred_boxes, pred_labels, box_scores = self._suppress(
-            pred_boxes, box_probs, num_classes
-        )
+        pred_boxes, pred_labels, box_scores = self._suppress(pred_boxes, box_probs, num_classes)
 
         return pred_boxes, pred_labels, box_scores
 
@@ -118,9 +104,7 @@ class FasterRCNN(BaseDetector):
         else:
             raise ValueError("Invalid val mode")
 
-    def _suppress(
-        self, pred_boxes: torch.Tensor, box_scores: torch.Tensor, num_classes: int
-    ):
+    def _suppress(self, pred_boxes: torch.Tensor, box_scores: torch.Tensor, num_classes: int):
         preset = self._get_preset()
         boxlist = []
         labellist = []

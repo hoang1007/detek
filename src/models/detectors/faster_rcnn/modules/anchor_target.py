@@ -1,7 +1,8 @@
 import torch
+
+from structures import ImageInfo
 from utils.box_utils import bbox_iou, bbox_transform
 from utils.functional import random_choice
-from structures import ImageInfo
 
 
 class AnchorTargetGenerator:
@@ -14,8 +15,7 @@ class AnchorTargetGenerator:
         negative_overlap: float = 0.3,
         fg_fraction: float = 0.5,
     ):
-        """
-        Gán nhãn cho từng anchor.
+        """Gán nhãn cho từng anchor.
 
         Args:
             anchors: Shape (N, 4)
@@ -32,14 +32,10 @@ class AnchorTargetGenerator:
         self.negative_overlap = negative_overlap
         self.fg_fraction = fg_fraction
 
-    def __call__(
-        self, anchors: torch.Tensor, gt_boxes: torch.Tensor, metadata: ImageInfo
-    ):
+    def __call__(self, anchors: torch.Tensor, gt_boxes: torch.Tensor, metadata: ImageInfo):
         A = anchors.size(0)
 
-        anchors, keep_ids = self._get_inside_anchors(
-            anchors, metadata.height, metadata.width
-        )
+        anchors, keep_ids = self._get_inside_anchors(anchors, metadata.height, metadata.width)
 
         bbox_targets, labels = self._mklabels(anchors, gt_boxes)
 
@@ -61,9 +57,9 @@ class AnchorTargetGenerator:
     def _mklabels(self, anchors: torch.Tensor, gt_boxes: torch.Tensor):
         A = anchors.size(0)
         G = gt_boxes.size(0)
-        assert (
-            A > 0 and G > 0
-        ), "Num of anchors and ground-truth boxes must be greater than 0"
+
+        assert A > 0, "Num of anchors must be greater than 0"
+        assert G > 0, "Num of ground-truth boxes must be greater than 0"
 
         labels = torch.empty(A, dtype=torch.long, device=anchors.device).fill_(-1)
 
@@ -85,15 +81,13 @@ class AnchorTargetGenerator:
         if self.clobber_positives:
             labels[max_ious < self.negative_overlap] = 0
 
-        ## Phân chia các nhãn: potivies, negatives, non-labels theo batch_size
+        # Phân chia các nhãn: potivies, negatives, non-labels theo batch_size
         num_fg = round(self.batch_size * self.fg_fraction)
         fg_ids = torch.where(labels == 1)[0]
 
         if fg_ids.size(0) > num_fg:
             # Lược bỏ nếu số nhãn foreground quá nhiều
-            disable_ids = fg_ids[
-                random_choice(fg_ids, fg_ids.size(0) - num_fg, replacement=False)
-            ]
+            disable_ids = fg_ids[random_choice(fg_ids, fg_ids.size(0) - num_fg, replacement=False)]
             labels[disable_ids] = -1
         else:
             # Cập nhật num_fg nếu số nhãn foreground quá ít
@@ -105,18 +99,14 @@ class AnchorTargetGenerator:
         bg_ids = torch.where(labels == 0)[0]
 
         if bg_ids.size(0) > num_bg:
-            disable_ids = bg_ids[
-                random_choice(bg_ids, bg_ids.size(0) - num_bg, replacement=False)
-            ]
+            disable_ids = bg_ids[random_choice(bg_ids, bg_ids.size(0) - num_bg, replacement=False)]
             labels[disable_ids] = -1
 
         bbox_targets = bbox_transform(anchors, gt_boxes[argmax_ious])
 
         return bbox_targets, labels
 
-    def _unmap(
-        self, data: torch.Tensor, count: int, ids: torch.Tensor, fill: float = 0
-    ):
+    def _unmap(self, data: torch.Tensor, count: int, ids: torch.Tensor, fill: float = 0):
         if len(data.shape) == 1:
             ret = torch.empty((count,)).type_as(data).fill_(fill)
             ret[ids] = data

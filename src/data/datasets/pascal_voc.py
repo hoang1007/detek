@@ -1,11 +1,12 @@
+import albumentations as A
 import numpy as np
 import torch
-from torchvision.datasets import VOCDetection
-import albumentations as A
 from albumentations.pytorch import ToTensorV2
+from torchvision.datasets import VOCDetection
+
+from structures import DataSample
 
 from .base_dataset import BaseDataset
-from structures import DataSample
 
 VOC_MEAN = (0.485, 0.456, 0.406)
 VOC_STD = (0.229, 0.224, 0.225)

@@ -1,9 +1,11 @@
 from typing import List
+
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, random_split
 
+from structures import BatchDataSample, DataSample
+
 from .datasets import BaseDataset
-from structures import DataSample, BatchDataSample
 
 
 class DataModule(LightningDataModule):

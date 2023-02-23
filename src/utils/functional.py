@@ -6,9 +6,9 @@ def init_weight(model: nn.Module, std=0.01):
     model.weight.data.normal_(std=std)  # type: ignore
 
     try:
-        model.bias.data.normal_(std=std) # type: ignore
-    except:
-        return model
+        model.bias.data.normal_(std=std)  # type: ignore
+    except ValueError:
+        print("Cannot init bias for model: ", model)
 
     return model
 
@@ -19,15 +19,13 @@ def freeze_weight(model: nn.Module):
             param.requires_grad = False
 
 
-def random_choice(
-    input: torch.Tensor, num_samples: int, replacement=False, auto_replace=False
-):
+def random_choice(input: torch.Tensor, num_samples: int, replacement=False, auto_replace=False):
     """
     Args:
         input (Tensor): Shape: (N, ...)
         num_samples (int): Number of samples to be drawn
         replacement (boolean): Whether to draw with replacement
-        auto_replace (boolean): Whether to replace the input with itself 
+        auto_replace (boolean): Whether to replace the input with itself
                                 if the number of samples is greater than the number of elements in the input
 
     Returns:
@@ -41,9 +39,7 @@ def random_choice(
     device = input.device
 
     if replacement:
-        ids = torch.randint(
-            input.size(0), size=(num_samples,), dtype=dtype, device=device
-        )
+        ids = torch.randint(input.size(0), size=(num_samples,), dtype=dtype, device=device)
     else:
         ids = torch.randperm(input.size(0), dtype=dtype, device=device)[:num_samples]
 

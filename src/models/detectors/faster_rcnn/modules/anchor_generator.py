@@ -1,4 +1,5 @@
-from typing import Union, List
+from typing import List, Union
+
 import torch
 from torch import nn
 
@@ -12,8 +13,7 @@ class AnchorGenerator(nn.Module):
         scales: Union[torch.Tensor, List[float]],
         aspect_ratios: Union[torch.Tensor, List[float]] = [0.5, 1, 2],
     ):
-        """
-        Generate anchors on image
+        """Generate anchors on image.
 
         Args:
             feat_stride: Stride of
@@ -43,7 +43,7 @@ class AnchorGenerator(nn.Module):
     def mkbase_anchors(self):
         A = self.num_base_anchors
 
-        base_area = self.feat_stride ** 2
+        base_area = self.feat_stride**2
 
         hs = torch.sqrt(base_area * self.aspect_ratios)  # shape (num_aspect_ratios,)
         ws = base_area / hs  # shape (num_aspect_ratios,)
@@ -63,12 +63,8 @@ class AnchorGenerator(nn.Module):
     def forward(self, feature_map: torch.Tensor):
         batch_size, _, feat_height, feat_width = feature_map.shape
 
-        shiftx = (
-            torch.arange(0, feat_width, device=feature_map.device) * self.feat_stride
-        )
-        shifty = (
-            torch.arange(0, feat_height, device=feature_map.device) * self.feat_stride
-        )
+        shiftx = torch.arange(0, feat_width, device=feature_map.device) * self.feat_stride
+        shifty = torch.arange(0, feat_height, device=feature_map.device) * self.feat_stride
 
         shiftx, shifty = torch.meshgrid(shiftx, shifty, indexing="ij")
 

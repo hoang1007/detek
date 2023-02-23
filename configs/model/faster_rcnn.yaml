@@ -24,7 +24,7 @@ detector:
       test_pre_nms_topN: 6000
       test_post_nms_topN: 300
       nms_thresh: 0.7
-      min_box_size: 16
+      min_box_size: 5
     anchor_generator:
       _target_: src.models.detectors.faster_rcnn.modules.AnchorGenerator
       scales: [8, 16, 32]
@@ -33,7 +33,7 @@ detector:
     anchor_target:
       _target_: src.models.detectors.faster_rcnn.modules.AnchorTargetGenerator
       batch_size: 256
-      allowed_border: 0
+      allowed_border: 10
       clobber_positives: False
       positive_overlap: 0.7
       negative_overlap: 0.3

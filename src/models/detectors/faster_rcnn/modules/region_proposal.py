@@ -1,13 +1,15 @@
 from typing import Dict, Tuple
+
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
+
+from structures import ImageInfo
+from utils.functional import init_weight
+
 from .anchor_generator import AnchorGenerator
 from .anchor_target import AnchorTargetGenerator
 from .proposal import ProposalLayer
-from structures import ImageInfo
-
-from utils.functional import init_weight
 
 
 class RPNLayer(nn.Module):
@@ -29,9 +31,7 @@ class RPNLayer(nn.Module):
         self.proposal_layer = proposal_layer
         self.anchor_target = anchor_target
 
-        self.conv = nn.Conv2d(
-            in_channels, self.feat_channels, kernel_size=3, stride=1, padding=1
-        )
+        self.conv = nn.Conv2d(in_channels, self.feat_channels, kernel_size=3, stride=1, padding=1)
         self.classifier = nn.Conv2d(
             self.feat_channels, self.anchor_generator.num_base_anchors * 2, kernel_size=1
         )
@@ -81,7 +81,7 @@ class RPNLayer(nn.Module):
         """
         beta = 10
 
-        gt_bboxes = gt_bboxes[0] # only support batch size 1
+        gt_bboxes = gt_bboxes[0]  # only support batch size 1
         bbox_pred, cls_scores, rois, anchors = self.forward(feature_map, metadata)
         rpn_bbox_targets, rpn_labels = self.anchor_target(anchors, gt_bboxes, metadata)
 

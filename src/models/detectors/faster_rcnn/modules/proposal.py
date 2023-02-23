@@ -1,8 +1,8 @@
 import torch
 from torch import nn
 from torchvision import ops
-from structures.image_info import ImageInfo
 
+from structures.image_info import ImageInfo
 from utils.box_utils import bbox_transform_inv, clip_boxes
 
 
@@ -16,8 +16,7 @@ class ProposalLayer(nn.Module):
         nms_thresh,
         min_box_size,
     ):
-        """
-        Lọc các loc bằng nms và đưa ra các RoIs từ các loc đã lọc.
+        """Lọc các loc bằng nms và đưa ra các RoIs từ các loc đã lọc.
 
         Args:
             rpn_bbox_pred: Dự đoán của box regessors trên từng anchor. Shape (N, 4)
@@ -47,15 +46,15 @@ class ProposalLayer(nn.Module):
         anchors: torch.Tensor,
         metadata: ImageInfo,
     ):
-        if rpn_bbox_pred.requires_grad:
-            rpn_bbox_pred = rpn_bbox_pred.detach()
+        # if rpn_bbox_pred.requires_grad:
+        #     rpn_bbox_pred = rpn_bbox_pred.detach()
 
         pre_nms_topN, post_nms_topN = self._get_nms_topN()
 
         proposals = bbox_transform_inv(anchors, rpn_bbox_pred)
         proposals = clip_boxes(proposals, metadata.height, metadata.width)
 
-        keep = self._filter_boxes(proposals, self.min_box_size * metadata.scale)
+        keep = self._filter_boxes(proposals, self.min_box_size)
         proposals = proposals[keep]
         objectness = objectness[keep]
 
