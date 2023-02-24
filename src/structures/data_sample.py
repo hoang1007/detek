@@ -25,3 +25,6 @@ class BatchDataSample:
             self.bboxes[i] = self.bboxes[i].to(device)
             self.labels[i] = self.labels[i].to(device)
         return self
+
+    def __len__(self):
+        return self.batch_size

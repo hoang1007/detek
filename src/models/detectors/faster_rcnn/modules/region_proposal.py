@@ -67,7 +67,7 @@ class RPNLayer(nn.Module):
         cls_scores = cls_scores.permute(0, 2, 3, 1).reshape(batch_size, -1, 2)
         bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 4)
 
-        cls_probs = F.softmax(cls_scores.detach(), dim=1)
+        cls_probs = F.softmax(cls_scores.detach(), dim=-1)
         objectness_scores = cls_probs[:, :, 1]
 
         proposals = self.proposal_layer(bbox_pred, objectness_scores, anchors, img_info)

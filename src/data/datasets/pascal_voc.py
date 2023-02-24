@@ -10,8 +10,8 @@ from structures import DataSample
 
 from .base_dataset import BaseDataset
 
-VOC_MEAN = (0.485, 0.456, 0.406)
-VOC_STD = (0.229, 0.224, 0.225)
+VOC_MEAN = (123.675, 116.28, 103.53)
+VOC_STD = (58.395, 57.12, 57.375)
 VOC_CLASSES = [
     "__background__",  # always index 0
     "aeroplane",
@@ -51,7 +51,7 @@ class VOCDataset(BaseDataset):
                     A.RandomSizedBBoxSafeCrop(
                         width=img_size[0], height=img_size[1], erosion_rate=0.0, p=0.2
                     ),
-                    A.Normalize(mean=VOC_MEAN, std=VOC_STD),
+                    A.Normalize(mean=VOC_MEAN, std=VOC_STD, max_pixel_value=1.0),
                     A.PadIfNeeded(min_height=img_size[1], min_width=img_size[0], value=0, p=1.0),
                     ToTensorV2(),
                 ),
@@ -60,7 +60,7 @@ class VOCDataset(BaseDataset):
         else:
             self.transform = A.Compose(
                 (
-                    A.Normalize(mean=VOC_MEAN, std=VOC_STD),
+                    A.Normalize(mean=VOC_MEAN, std=VOC_STD, max_pixel_value=1.0),
                     ToTensorV2(),
                 ),
                 bbox_params=A.BboxParams(format="pascal_voc", label_fields=["labels"]),

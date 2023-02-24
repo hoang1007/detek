@@ -127,7 +127,7 @@ class AnchorTargetGenerator:
             labels[disable_ids] = -1
 
         keep_ids = torch.hstack((fg_ids, bg_ids))
-        bbox_targets[keep_ids] = bbox_transform(anchors[keep_ids], gt_boxes[argmax_ious][keep_ids])
+        bbox_targets[keep_ids] = bbox_transform(anchors[keep_ids], gt_boxes[argmax_ious[keep_ids]])
 
         return bbox_targets, labels
 

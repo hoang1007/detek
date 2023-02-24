@@ -38,8 +38,8 @@ logger:
 
 callbacks:
   model_checkpoint:
-    monitor: "val/mAP"
+    monitor: "val/map"
     mode: "max"
 
   early_stopping:
-    monitor: "val/mAP"
+    monitor: "val/map"

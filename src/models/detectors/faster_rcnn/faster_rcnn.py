@@ -24,7 +24,7 @@ class FasterRCNN(BaseDetector):
     def backbone_forward(self, images: torch.Tensor):
         feature_map = self.backbone(images)
         h, w = images.shape[-2:]
-        scale = round(feature_map.size(-1) / w)
+        scale = feature_map.size(-1) / w
 
         img_info = ImageInfo(w, h, scale)
 

@@ -46,7 +46,13 @@ class DetectionModule(LightningModule):
         assert isinstance(loss_dict, Dict), "loss_dict must be a dict"
 
         for loss_name in loss_dict.keys():
-            self.log(f"train/{loss_name}", loss_dict[loss_name], on_epoch=True, on_step=False)
+            self.log(
+                f"train/{loss_name}",
+                loss_dict[loss_name],
+                on_epoch=True,
+                on_step=False,
+                batch_size=len(batch),
+            )
 
         loss = sum(loss_dict.values())
         return loss
@@ -78,7 +84,16 @@ class DetectionModule(LightningModule):
         self.ap_metric.update(preds, gts)
 
     def validation_epoch_end(self, outputs):
-        self.log("val/mAP", self.ap_metric.compute(), prog_bar=True, on_epoch=True, on_step=False)
+        metrics = self.ap_metric.compute()
+
+        for metric_name in metrics.keys():
+            self.log(
+                f"val/{metric_name}",
+                metrics[metric_name],
+                prog_bar=True,
+                on_epoch=True,
+                on_step=False,
+            )
 
     def test_step(self, batch: BatchDataSample, batch_idx: int):
         batch.to(self.device)
