@@ -51,6 +51,8 @@ class ProposalTargetGenerator:
         gt_labels: List[torch.Tensor],
     ):
         num_images = len(gt_boxes)
+        # Disable gradient computation for proposals (for efficiency)
+        proposals = [p.detach() for p in proposals]
 
         if self.use_gt:
             for i in range(num_images):
