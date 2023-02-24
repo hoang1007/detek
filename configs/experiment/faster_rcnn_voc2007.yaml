@@ -35,6 +35,7 @@ logger:
   wandb:
     tags: ${tags}
     group: "faster_rcnn"
+    project: "Faster R-CNN"
 
 callbacks:
   model_checkpoint:
