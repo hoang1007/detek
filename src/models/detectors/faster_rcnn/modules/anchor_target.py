@@ -84,6 +84,7 @@ class AnchorTargetGenerator:
         assert A > 0, "Num of anchors must be greater than 0"
         assert G > 0, "Num of ground-truth boxes must be greater than 0"
 
+        # Initiate containers
         bbox_targets = torch.zeros((A, 4), dtype=torch.float32, device=anchors.device)
         labels = torch.empty(A, dtype=torch.long, device=anchors.device).fill_(-1)
 
@@ -107,7 +108,7 @@ class AnchorTargetGenerator:
 
         # Phân chia các nhãn: potivies, negatives, non-labels theo batch_size
         num_fg = round(self.batch_size * self.fg_fraction)
-        fg_ids = torch.where(labels == 1)[0]
+        fg_ids = torch.nonzero(labels == 1).squeeze_(1)
 
         if fg_ids.size(0) > num_fg:
             # Lược bỏ nếu số nhãn foreground quá nhiều
@@ -120,7 +121,7 @@ class AnchorTargetGenerator:
         assert num_fg == (labels == 1).sum()
 
         num_bg = self.batch_size - num_fg
-        bg_ids = torch.where(labels == 0)[0]
+        bg_ids = torch.nonzero(labels == 0).squeeze_(1)
 
         if bg_ids.size(0) > num_bg:
             disable_ids = bg_ids[random_choice(bg_ids, bg_ids.size(0) - num_bg, replacement=False)]

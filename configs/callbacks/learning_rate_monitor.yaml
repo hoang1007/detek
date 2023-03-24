@@ -1,0 +1,8 @@
+# https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.LearningRateMonitor.html
+
+# Automatically monitor and logs learning rate for learning rate schedulers during training.
+learning_rate_monitor:
+  _target_: pytorch_lightning.callbacks.LearningRateMonitor
+  logging_interval: "step" # "step" or "epoch"
+  log_momentum: False # if True, logs the momentum value of optimizers that support it (e.g. SGD)
+  # log_rank_zero_only: False  # this keyword argument isn't available in stable version

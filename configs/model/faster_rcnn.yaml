@@ -11,7 +11,7 @@ detector:
   backbone:
     _target_: src.models.backbones.resnet.resnet_backbone
     layer: 50
-    fixed_blocks: 2
+    fixed_blocks: 1
   rpn:
     _target_: src.models.detectors.faster_rcnn.modules.RPNLayer
     in_channels: 1024
@@ -42,12 +42,14 @@ detector:
     _target_: src.models.detectors.faster_rcnn.modules.RCNN
     roi_size: 7
     num_channels: 1024
+    hidden_channels: 256
+    hidden_dim: 2048
     num_classes: 21
     spatial_scale: 0.0625
     proposal_target:
       _target_: src.models.detectors.faster_rcnn.modules.ProposalTargetGenerator
       _partial_: True
-      batch_size: 128
+      proposals_per_img: 128
       use_gt: True
       fg_fraction: 0.25
       fg_thresh: 0.5

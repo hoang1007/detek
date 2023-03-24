@@ -57,10 +57,7 @@ class RPNLayer(nn.Module):
         """
         batch_size = feature_map.size(0)
 
-        anchors = self.anchor_generator(feature_map)  # shape (A, 4)
-
         fm = F.relu(self.conv(feature_map), inplace=True)
-
         cls_scores = self.classifier(fm)  # shape (B, A * 2, H, W)
         bbox_pred = self.regressor(fm)  # shape (B, A * 4, H, W)
 
@@ -70,6 +67,7 @@ class RPNLayer(nn.Module):
         cls_probs = F.softmax(cls_scores.detach(), dim=-1)
         objectness_scores = cls_probs[:, :, 1]
 
+        anchors = self.anchor_generator(img_info.width, img_info.height)  # shape (A, 4)
         proposals = self.proposal_layer(bbox_pred, objectness_scores, anchors, img_info)
 
         return bbox_pred, cls_scores, proposals, anchors

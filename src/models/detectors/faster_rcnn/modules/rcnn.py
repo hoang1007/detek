@@ -15,6 +15,8 @@ class RCNN(nn.Module):
         self,
         roi_size: int,
         num_channels: int,
+        hidden_channels: int,
+        hidden_dim: int,
         num_classes: int,
         spatial_scale: float,
         proposal_target: ProposalTargetGenerator,
@@ -23,13 +25,13 @@ class RCNN(nn.Module):
         super().__init__()
 
         self.num_classes = num_classes
-        hidden_dim = 4096
 
         self.fc = nn.Sequential(
-            nn.Linear(num_channels * roi_size * roi_size, hidden_dim),
+            nn.Conv2d(num_channels, hidden_channels, kernel_size=1),
+            nn.Flatten(),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_channels * roi_size**2, hidden_dim),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
         )
@@ -37,7 +39,7 @@ class RCNN(nn.Module):
         self.roi_cls = nn.Linear(hidden_dim, self.num_classes)
         self.roi_reg = nn.Linear(hidden_dim, self.num_classes * 4)
 
-        self.roi_align = ops.RoIAlign((roi_size, roi_size), spatial_scale, sampling_ratio=-1)
+        self.roi_pooling = ops.RoIAlign((roi_size, roi_size), spatial_scale, sampling_ratio=-1)
         # self.roi_align = ops.RoIPool(roi_size, spatial_scale=spatial_scale)
         self.proposal_target = proposal_target(self.num_classes)  # type: ignore
 
@@ -48,20 +50,19 @@ class RCNN(nn.Module):
         Args:
             feature_map: Shape (B, C, H, W)
             proposals: List of shape (N, 4)
+
+        Returns:
+            roi_bbox_pred: Shape (B, N, 4 * num_classes)
+            roi_cls_scores: Shape (B, N, num_classes)
         """
 
         batch_size = feature_map.size(0)
 
-        pooled = self.roi_align(feature_map, proposals)
-
-        # (B * N, C, roi_size, roi_size) -> (B, N, C * roi_size * roi_size)
-        pooled = torch.flatten(pooled, start_dim=1)
-        pooled = pooled.view(batch_size, -1, pooled.size(-1))
-
+        pooled = self.roi_pooling(feature_map, proposals)
         fc_out = self.fc(pooled)
 
-        roi_bbox_pred = self.roi_reg(fc_out)
-        roi_cls_scores = self.roi_cls(fc_out)
+        roi_bbox_pred = self.roi_reg(fc_out).view(batch_size, -1, 4 * self.num_classes)
+        roi_cls_scores = self.roi_cls(fc_out).view(batch_size, -1, self.num_classes)
 
         return roi_bbox_pred, roi_cls_scores
 
@@ -70,7 +71,7 @@ class RCNN(nn.Module):
         feature_map: torch.Tensor,
         proposals: List[torch.Tensor],
         gt_boxes: List[torch.Tensor],
-        gt_labels: torch.Tensor,
+        gt_labels: List[torch.Tensor],
     ):
         """
         Args:

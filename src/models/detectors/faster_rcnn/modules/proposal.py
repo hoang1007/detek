@@ -9,24 +9,13 @@ from utils.box_utils import bbox_transform_inv, clip_boxes
 class ProposalLayer(nn.Module):
     def __init__(
         self,
-        train_pre_nms_topN,
-        train_post_nms_topN,
-        test_pre_nms_topN,
-        test_post_nms_topN,
-        nms_thresh,
-        min_box_size,
+        train_pre_nms_topN: int,
+        train_post_nms_topN: int,
+        test_pre_nms_topN: int,
+        test_post_nms_topN: int,
+        nms_thresh: float,
+        min_box_size: int,
     ):
-        """Lọc các loc bằng nms và đưa ra các RoIs từ các loc đã lọc.
-
-        Args:
-            rpn_bbox_pred: Dự đoán của box regessors trên từng anchor. Shape (N, 4)
-            fg_probs: Xác suất để box là foreground. Shape (N, 1)
-            anchors: Các mỏ neo trên ảnh. Shape (N, 4)
-            im_info: Đại diện cho (H, W, scale) của ảnh
-
-        Returns:
-            rois: RoIs được đề xuất của ảnh
-        """
         super().__init__()
 
         self._pre_nms_topN = {"train": train_pre_nms_topN, "test": test_pre_nms_topN}
@@ -91,7 +80,6 @@ class ProposalLayer(nn.Module):
                 nms_keep_ids = nms_keep_ids[:post_nms_topN]
 
             nb_proposals = nb_proposals[nms_keep_ids]
-
             batch_proposals.append(nb_proposals)
 
         return batch_proposals
@@ -105,6 +93,6 @@ class ProposalLayer(nn.Module):
         ws = boxes[:, 2] - boxes[:, 0]
         hs = boxes[:, 3] - boxes[:, 1]
 
-        keep = torch.logical_and(ws >= min_size, hs >= min_size)
+        keep = (ws >= min_size) & (hs >= min_size)
 
         return keep

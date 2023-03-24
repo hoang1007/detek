@@ -30,7 +30,7 @@ class FasterRCNN(BaseDetector):
 
         return feature_map, img_info
 
-    def forward(self, images):
+    def forward(self, images: torch.Tensor):
         """
         Args:
             images: Shape (B, C, H, W)
@@ -51,39 +51,45 @@ class FasterRCNN(BaseDetector):
         }
 
     def forward_train(
-        self, images: torch.Tensor, gt_boxes: List[torch.Tensor], gt_labels: torch.Tensor
+        self, images: torch.Tensor, gt_boxes: List[torch.Tensor], gt_labels: List[torch.Tensor]
     ):
         feature_map, metadata = self.backbone_forward(images)
 
-        rpn_losses, rois = self.rpn.forward_train(feature_map, gt_boxes, metadata)
-        roi_losses = self.rcnn.forward_train(feature_map, rois, gt_boxes, gt_labels)
+        rpn_losses, proposals = self.rpn.forward_train(feature_map, gt_boxes, metadata)
+        roi_losses = self.rcnn.forward_train(feature_map, proposals, gt_boxes, gt_labels)
 
-        return {**rpn_losses, **roi_losses}
+        losses = dict()
+        losses.update(rpn_losses)
+        losses.update(roi_losses)
+        return losses
 
     def forward_test(self, images: torch.Tensor):
         num_classes = self.rcnn.num_classes
         num_images = images.shape[0]
 
-        delta_means = (0.0, 0.0, 0.0, 0.0)
-        delta_stds = (0.1, 0.1, 0.2, 0.2)
-
-        delta_means = torch.tensor(delta_means, device=images.device).repeat(1, 1, num_classes, 1)
-        delta_stds = torch.tensor(delta_stds, device=images.device).repeat(1, 1, num_classes, 1)
+        delta_means = images.new(self.rcnn.proposal_target.bbox_normalize_means).repeat(
+            1, 1, num_classes, 1
+        )
+        delta_stds = images.new(self.rcnn.proposal_target.bbox_normalize_stds).repeat(
+            1, 1, num_classes, 1
+        )
 
         outputs = self(images)
 
         roi_bbox_pred = outputs["roi_bbox_pred"].view(num_images, -1, num_classes, 4)
         roi_bbox_pred = roi_bbox_pred * delta_stds + delta_means
 
-        rois = torch.stack(outputs["rpn_proposals"], dim=0).unsqueeze_(2).expand_as(roi_bbox_pred)
+        proposals = (
+            torch.stack(outputs["rpn_proposals"], dim=0).unsqueeze_(2).expand_as(roi_bbox_pred)
+        )
 
-        pred_boxes = bbox_transform_inv(rois.reshape(-1, 4), roi_bbox_pred.reshape(-1, 4))
+        pred_boxes = bbox_transform_inv(proposals.reshape(-1, 4), roi_bbox_pred.reshape(-1, 4))
 
         image_height, image_width = images.shape[-2:]
         pred_boxes = clip_boxes(pred_boxes, image_height, image_width)
 
         pred_boxes = pred_boxes.view(num_images, -1, num_classes, 4)
-        box_probs = torch.softmax(outputs["roi_cls_scores"], dim=-1)
+        pred_scores = torch.softmax(outputs["roi_cls_scores"], dim=-1)
 
         batch_pred_boxes: List[torch.Tensor] = []
         batch_pred_labels: List[torch.Tensor] = []
@@ -91,7 +97,7 @@ class FasterRCNN(BaseDetector):
 
         for i in range(num_images):
             pred_boxes_, pred_labels_, box_scores_ = self._suppress(
-                pred_boxes[i], box_probs[i], num_classes
+                pred_boxes[i], pred_scores[i], num_classes
             )
 
             batch_pred_boxes.append(pred_boxes_)

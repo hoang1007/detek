@@ -1,6 +1,6 @@
 _target_: src.data.DataModule
 
-batch_size: 32
+batch_size: 4
 num_workers: 4
 train_val_ratio: 0.75
 pin_memory: true

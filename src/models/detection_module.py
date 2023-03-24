@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import torch
 from pytorch_lightning import LightningModule
@@ -29,8 +29,8 @@ class DetectionModule(LightningModule):
     def forward(
         self,
         images,
-        gt_bboxes: Optional[torch.Tensor] = None,
-        gt_labels: Optional[torch.Tensor] = None,
+        gt_bboxes: Optional[List[torch.Tensor]] = None,
+        gt_labels: Optional[List[torch.Tensor]] = None,
     ):
         if self.training:
             assert gt_bboxes is not None

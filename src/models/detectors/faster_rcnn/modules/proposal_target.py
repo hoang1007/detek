@@ -11,7 +11,7 @@ class ProposalTargetGenerator:
         self,
         num_classes: int,
         use_gt: bool,
-        batch_size: int,
+        proposals_per_img: int,
         fg_fraction: float,
         fg_thresh: float,
         bg_thresh_high: float,
@@ -36,7 +36,7 @@ class ProposalTargetGenerator:
 
         self.num_classes = num_classes
         self.use_gt = use_gt
-        self.batch_size = batch_size
+        self.proposals_per_img = proposals_per_img
         self.fg_fraction = fg_fraction
         self.fg_thesh = fg_thresh
         self.bg_thresh_high = bg_thresh_high
@@ -58,16 +58,13 @@ class ProposalTargetGenerator:
             for i in range(num_images):
                 proposals[i] = torch.cat((proposals[i], gt_boxes[i]), dim=0)
 
-        rois_per_image = self.batch_size // num_images
-        fg_rois_per_image = round(self.fg_fraction * rois_per_image)
-
         batched_bbox_targets = []
         batched_rois = []
         batched_labels = []
 
         for i in range(num_images):
             bbox_targets_data, roi_labels, sampled_rois = self._sample_rois(
-                proposals[i], gt_boxes[i], gt_labels[i], fg_rois_per_image, rois_per_image
+                proposals[i], gt_boxes[i], gt_labels[i], self.proposals_per_img
             )
 
             # Transform bbox_targets_data from shape (S, 4) to (S, num_classes * 4)
@@ -88,18 +85,19 @@ class ProposalTargetGenerator:
 
         return bbox_targets, sampled_rois, roi_labels
 
-    def _sample_rois(self, rois, gt_boxes, gt_labels, fg_rois_per_img, rois_per_img):
+    def _sample_rois(self, rois, gt_boxes, gt_labels, rois_per_img):
         ious = bbox_iou(rois, gt_boxes)
 
         # Find the ground-truth box with the highest IoU for each RoI
         max_ious, gt_assignment = ious.max(dim=1)
         roi_labels = gt_labels[gt_assignment]
 
-        fg_ids = torch.where(max_ious >= self.fg_thesh)[0]
-        bg_ids = torch.where((max_ious < self.bg_thresh_high) & (max_ious >= self.bg_thresh_low))[
-            0
-        ]
+        fg_ids = torch.nonzero(max_ious >= self.fg_thesh).squeeze_(1)
+        bg_ids = torch.nonzero(
+            (max_ious < self.bg_thresh_high) & (max_ious >= self.bg_thresh_low)
+        ).squeeze_(1)
 
+        fg_rois_per_img = round(self.fg_fraction * self.proposals_per_img)
         if fg_ids.numel() > 0 and bg_ids.numel() > 0:
             fg_rois_per_img = min(fg_rois_per_img, fg_ids.numel())
             bg_rois_per_img = rois_per_img - fg_rois_per_img
@@ -107,7 +105,7 @@ class ProposalTargetGenerator:
             fg_rois_per_img = rois_per_img
             bg_rois_per_img = 0
         elif self.use_gt:
-            raise ValueError("Num foreground labels cannot equals to 0")
+            raise ValueError("Num foreground labels cannot be equals to 0")
         else:
             bg_rois_per_img = rois_per_img
             fg_rois_per_img = 0
