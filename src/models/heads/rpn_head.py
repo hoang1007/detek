@@ -55,6 +55,10 @@ class RPNHead(BaseModel):
         """
         Args:
             x (Tensor): Feature map of shape (B, C, H, W).
+        
+        Returns:
+            rpn_cls (Tensor): Objectness logits for each anchor of shape (B, H * W * num_base_anchors, 2).
+            rpn_reg (Tensor): Bounding box regression for each anchor of shape (B, H * W * num_base_anchors, 4).
         """
         batch_size = x.size(0)
         x = self.conv(x)
@@ -67,15 +71,21 @@ class RPNHead(BaseModel):
         return rpn_cls, rpn_reg
 
     def forward_train(self, x: torch.Tensor, gt_bboxes: List[torch.Tensor], im_info: ImageInfo):
+        """
+        Args:
+            x (Tensor): Feature map of shape (B, C, H, W).
+            gt_bboxes (List[Tensor]): Ground truth bounding boxes of shape (N, 4).
+            im_info (ImageInfo): Image information.
+        """
         rpn_cls, rpn_reg = self(x)
 
         assert (
             self.rpn_target_generator is not None
         ), "RPN target generator is required for training!"
         anchors = self.anchor_generator(im_info.height, im_info.width)
-        objectness = torch.softmax(rpn_cls, dim=-1)[:, :, 1]
+        objectness = torch.softmax(rpn_cls.clone().detach(), dim=-1)[:, :, 1]
         proposals = self.get_proposals(
-            rpn_reg.detach(), objectness, anchors, im_info, self.train_nms_cfg
+            rpn_reg.clone().detach(), objectness, anchors, im_info, self.train_nms_cfg
         )
         rpn_reg_targets, rpn_cls_targets = self.rpn_target_generator(anchors, gt_bboxes, im_info)
 
@@ -124,8 +134,9 @@ class RPNHead(BaseModel):
         sampled_proposals: List[torch.Tensor] = []
         batch_objectness = objectness.view(batch_size, -1)
         for proposals, objectness in zip(batch_proposals, batch_objectness):
-            keep_ids = (proposals[:, 2] - proposals[:, 0]) > nms_cfg["min_bbox_size"]
-            keep_ids &= (proposals[:, 3] - proposals[:, 1]) > nms_cfg["min_bbox_size"]
+            # Filter out proposals which are too small
+            keep_ids = (proposals[:, 2] - proposals[:, 0]) >= nms_cfg["min_bbox_size"]
+            keep_ids &= (proposals[:, 3] - proposals[:, 1]) >= nms_cfg["min_bbox_size"]
             proposals = proposals[keep_ids]
             objectness = objectness[keep_ids]
 

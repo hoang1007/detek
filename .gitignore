@@ -147,6 +147,7 @@ dmypy.json
 
 # Lightning-Hydra-Template
 configs/local/default.yaml
-*/data/
+/data/
+notebooks/data/
 /logs/
 .env

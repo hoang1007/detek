@@ -46,7 +46,7 @@ class DetResult:
         from torchvision.utils import draw_bounding_boxes
         labels = None
         if self._classes is not None:
-            labels = [self._classes[label] for label in self._labels]
+            labels = [self._classes[label] for label in self._labels.tolist()]
         image = draw_bounding_boxes(self._image, self.bboxes, labels=labels)
 
         if backend == "none":

@@ -102,7 +102,6 @@ class RoIHead(BaseModel):
             im_info (ImageInfo): Information about the image.
         """
         assert len(rois) == x.size(0), "Number of rois must match batch size"
-        batch_size = x.size(0)
         spatial_scale = x.size(3) / im_info.width
 
         if self.use_roi_align:
@@ -168,7 +167,7 @@ class RoIHead(BaseModel):
         assert sample_mask.sum() == bbox_targets.size(0), "Check roi sampler"
         objectness_mask = labels > 0
 
-        # Convert bbox targets from (N, 4) to (N, 4 * num_classes)
+        # Expand bbox targets from (N, 4) to (N, 4 * num_classes)
         expanded_bbox_targets = bbox_targets.new_zeros(bbox_targets.size(0), self.num_classes, 4)
         expanded_bbox_targets[range(bbox_targets.size(0)), labels] = bbox_targets
         expanded_bbox_targets = expanded_bbox_targets.view(-1, 4 * self.num_classes)

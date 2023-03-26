@@ -45,12 +45,12 @@ class RoITargetGenerator:
             batch_gt_labels (list[Tensor]): Ground-truth labels of each image.
 
         Returns:
-            batch_reg_targets (list[Tensor]): Regression targets of shape (B, N, 4).
-            batch_labels (list[Tensor]): Labels of shape (B, N,).
-            batch_roi_samples (list[Tensor]): Sampled proposals of shape (N, 4).
+            batch_reg_targets (list[Tensor]): Regression targets of shape (N, 4) per batch.
+            batch_labels (list[Tensor]): Labels of shape (N, ) per batch.
+            batch_roi_samples (list[Tensor]): Sampled proposals of shape (N, 4) per batch.
         """
         # Disable gradient computation for proposals
-        batch_proposals = [proposals.detach() for proposals in batch_proposals]
+        batch_proposals = [proposals.clone().detach() for proposals in batch_proposals]
 
         if self.use_gt:
             batch_proposals = [
@@ -102,7 +102,8 @@ class RoITargetGenerator:
         keep_ids = torch.hstack((fg_ids, bg_ids))
         roi_samples = proposals[keep_ids]
         reg_targets = bbox_transform(roi_samples, gt_boxes[argmax_ious[keep_ids]])
+        gt_labels[argmax_ious[bg_ids]] = 0  # Assign background labels
         roi_labels = gt_labels[argmax_ious[keep_ids]]
-        roi_labels[num_fg:] = 0  # Assign background labels
+        # roi_labels[num_fg:] = 0  # Assign background labels
 
         return reg_targets, roi_labels, roi_samples

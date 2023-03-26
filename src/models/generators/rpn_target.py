@@ -55,8 +55,8 @@ class RPNTargetGenerator:
 
         for gt_boxes in batch_gt_bboxes:
             reg_targets, labels = self.sample(anchors, gt_boxes)
-            reg_targets = self._unmap(reg_targets, num_anchors, keep)
-            labels = self._unmap(labels, num_anchors, keep)
+            reg_targets = self._unmap(reg_targets, num_anchors, keep, fill=0)
+            labels = self._unmap(labels, num_anchors, keep, fill=-1)
 
             batch_reg_targets.append(reg_targets)
             batch_labels.append(labels)
@@ -101,13 +101,12 @@ class RPNTargetGenerator:
         gt_max_ious, gt_argmax_ious = ious.max(dim=0)  # (K, )
 
         labels[max_ious < self.negative_iou_thr] = 0
-
         labels[gt_argmax_ious] = 1
         labels[max_ious >= self.positive_iou_thr] = 1
 
         # 2. Sampling step
         num_fg = int(self.fg_fraction * self.num_samples)
-        fg_ids = torch.nonzero(labels == 1).view(-1)
+        fg_ids = torch.nonzero(labels == 1).squeeze_(1)
 
         if fg_ids.numel() > num_fg:
             disable_ids = fg_ids[random_choice(fg_ids, fg_ids.numel() - num_fg)]
@@ -116,7 +115,7 @@ class RPNTargetGenerator:
             num_fg = fg_ids.numel()
 
         num_bg = self.num_samples - num_fg
-        bg_ids = torch.nonzero(labels == 0).view(-1)
+        bg_ids = torch.nonzero(labels == 0).squeeze_(1)
 
         if bg_ids.numel() > num_bg:
             disable_ids = bg_ids[random_choice(bg_ids, bg_ids.numel() - num_bg)]
@@ -125,8 +124,8 @@ class RPNTargetGenerator:
             num_bg = bg_ids.numel()
 
         # Compute regression targets
-        keep_ids = labels != -1
-        reg_targets[keep_ids] = bbox_transform(anchors[keep_ids], gt_boxes[argmax_ious[keep_ids]])
+        valid_ids = labels != -1
+        reg_targets[valid_ids] = bbox_transform(anchors[valid_ids], gt_boxes[argmax_ious[valid_ids]])
 
         return reg_targets, labels
 
