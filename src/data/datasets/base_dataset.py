@@ -2,7 +2,7 @@ from typing import List
 
 from torch.utils.data import Dataset
 
-from structures import DataSample
+from src.structures import DataSample
 
 
 class BaseDataset(Dataset):

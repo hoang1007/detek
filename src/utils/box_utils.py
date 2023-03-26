@@ -81,7 +81,7 @@ def bbox_transform(src_boxes: torch.Tensor, tar_boxes: torch.Tensor):
     return deltas
 
 
-def bbox_transform_inv(
+def bbox_inv_transform(
     src_boxes: torch.Tensor, tar_deltas: torch.Tensor, clamp_thresh=math.log(1000 / 16)
 ):
     """Inverse transform the target boxes to the offset space of the source boxes.
@@ -127,7 +127,7 @@ def compute_box_areas(boxes: torch.Tensor):
     return areas
 
 
-def bbox_iou(boxes: torch.Tensor, query_boxes: torch.Tensor):
+def bbox_iou(boxes1: torch.Tensor, boxes2: torch.Tensor):
     """Compute the Intersection over Union of two set of boxes.
 
     Parameters
@@ -138,24 +138,18 @@ def bbox_iou(boxes: torch.Tensor, query_boxes: torch.Tensor):
         ious: ious between boxes and query_boxes. Shape (N, K)
     """
 
-    box_areas = compute_box_areas(boxes)
-    query_areas = compute_box_areas(query_boxes)
+    area1 = compute_box_areas(boxes1)
+    area2 = compute_box_areas(boxes2)
 
-    overlap_w = (
-        torch.min(boxes[:, 2:3], query_boxes[:, 2:3].t())
-        - torch.max(boxes[:, 0:1], query_boxes[:, 0:1].t())
-        + 1
-    ).clamp(min=0)
-    overlap_h = (
-        torch.min(boxes[:, 3:4], query_boxes[:, 3:4].t())
-        - torch.max(boxes[:, 1:2], query_boxes[:, 1:2].t())
-        + 1
-    ).clamp(min=0)
+    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # shape (N, K, 2)
+    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # shape (N, K, 2)
+    wh = (rb - lt).clamp(min=0)
+    intersection = wh.prod(dim=2)  # shape (N, K)
 
-    overlap_areas = overlap_w * overlap_h
-    # union_areas = box_areas + query_areas - overlap_areas
-    union_areas = box_areas.view(-1, 1) + query_areas.view(1, -1) - overlap_areas
-    ious = overlap_areas / union_areas
+    union = area1[:, None] + area2[None, :] - intersection
+    ious = intersection / union
+
+    assert (ious >= 0).all() and (ious <= 1).all()
     return ious
 
 

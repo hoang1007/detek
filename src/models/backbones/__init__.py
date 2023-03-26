@@ -1,1 +1,1 @@
-from .resnet import resnet_backbone
+from .resnet import ResnetBackbone

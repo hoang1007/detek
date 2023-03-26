@@ -5,7 +5,7 @@ from pytorch_lightning import LightningModule
 from torch import optim
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
-from structures import BatchDataSample
+from src.structures import BatchDataSample, DetResult
 
 from .detectors import BaseDetector
 
@@ -32,6 +32,7 @@ class DetectionModule(LightningModule):
         gt_bboxes: Optional[List[torch.Tensor]] = None,
         gt_labels: Optional[List[torch.Tensor]] = None,
     ):
+        images = self.detector.img_normalize(images)
         if self.training:
             assert gt_bboxes is not None
             assert gt_labels is not None
@@ -60,20 +61,21 @@ class DetectionModule(LightningModule):
     def validation_step(self, batch: BatchDataSample, batch_idx: int):
         batch.to(self.device)
 
-        pred_bboxes, pred_labels, pred_scores = self(batch.images)
+        det_results = self(batch.images)
 
         preds = []
         gts = []
-        for i in range(len(pred_bboxes)):
+        for det_result in det_results:
+            assert isinstance(det_result, DetResult)
             preds.append(
                 {
-                    "boxes": pred_bboxes[i],
-                    "labels": pred_labels[i],
-                    "scores": pred_scores[i],
+                    "boxes": det_result.bboxes,
+                    "labels": det_result.labels,
+                    "scores": det_result.scores,
                 }
             )
 
-        for i in range(len(batch.bboxes)):
+        for i in range(len(batch)):
             gts.append(
                 {
                     "boxes": batch.bboxes[i],

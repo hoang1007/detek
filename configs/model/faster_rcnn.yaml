@@ -8,52 +8,60 @@ optimizer:
 
 detector:
   _target_: src.models.detectors.FasterRCNN
+  img_normalize_means: [123.675, 116.28, 103.53]
+  img_normalize_stds: [58.395, 57.12, 57.375]
   backbone:
-    _target_: src.models.backbones.resnet.resnet_backbone
-    layer: 50
-    fixed_blocks: 1
-  rpn:
-    _target_: src.models.detectors.faster_rcnn.modules.RPNLayer
+    _target_: src.models.backbones.ResnetBackbone
+    depth: 50
+    pretrained: True
+    num_stages: 3
+    frozen_stages: 1
+  rpn_head:
+    _target_: src.models.heads.RPNHead
     in_channels: 1024
     feat_channels: 1024
-    feat_stride: 16
-    proposal_layer:
-      _target_: src.models.detectors.faster_rcnn.modules.ProposalLayer
-      train_pre_nms_topN: 12000
-      train_post_nms_topN: 2000
-      test_pre_nms_topN: 6000
-      test_post_nms_topN: 300
-      nms_thresh: 0.7
-      min_box_size: 5
     anchor_generator:
-      _target_: src.models.detectors.faster_rcnn.modules.AnchorGenerator
+      _target_: src.models.generators.AnchorGenerator
       scales: [8, 16, 32]
-      aspect_ratios: [0.5, 1, 2]
-      feat_stride: 16
-    anchor_target:
-      _target_: src.models.detectors.faster_rcnn.modules.AnchorTargetGenerator
-      batch_size: 256
-      allowed_border: 10
-      clobber_positives: False
-      positive_overlap: 0.7
-      negative_overlap: 0.3
+      ratios: [0.5, 1, 2]
+      stride: 16
+    rpn_target_generator:
+      _target_: src.models.generators.RPNTargetGenerator
+      num_samples: 256
       fg_fraction: 0.5
-  rcnn:
-    _target_: src.models.detectors.faster_rcnn.modules.RCNN
-    roi_size: 7
-    num_channels: 1024
-    hidden_channels: 256
-    hidden_dim: 2048
+      positive_iou_thr: 0.7
+      negative_iou_thr: 0.3
+      allowed_border: 4
+    train_nms_cfg:
+      nms_pre: 12000
+      nms_post: 2000
+      nms_thr: 0.7
+      min_bbox_size: 0
+    test_nms_cfg:
+      nms_pre: 6000
+      nms_post: 1000
+      nms_thr: 0.7
+      min_bbox_size: 0
+  roi_head:
+    _target_: src.models.heads.RoIHead
+    roi_size: 14
+    in_channels: 1024
     num_classes: 21
-    spatial_scale: 0.0625
-    proposal_target:
-      _target_: src.models.detectors.faster_rcnn.modules.ProposalTargetGenerator
-      _partial_: True
-      proposals_per_img: 128
-      use_gt: True
+    use_roi_align: true
+    feature_extractor:
+      _target_: src.models.heads.roi_head.roi_feature_extractor
+      arch: resnet50
+      pretrained: true
+    roi_target_generator:
+      _target_: src.models.generators.RoITargetGenerator
+      num_samples: 128
       fg_fraction: 0.25
-      fg_thresh: 0.5
-      bg_thresh_high: 0.5
-      bg_thresh_low: 0.1
-      bbox_normalize_means: [0, 0, 0, 0]
-      bbox_normalize_stds: [0.1, 0.1, 0.2, 0.2]
+      positive_iou_thr: 0.5
+      negative_iou_thr_low: 0.3
+      negative_iou_thr_high: 0.5
+      use_gt: true
+    bbox_deltas_normalize_means: [0, 0, 0, 0]
+    bbox_deltas_normalize_stds: [0.1, 0.1, 0.2, 0.2]
+    test_nms_cfg:
+      nms_thr: 0.7
+      score_thr: 0.01

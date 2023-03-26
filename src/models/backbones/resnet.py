@@ -1,68 +1,53 @@
-from torch import nn
+from typing import Optional
+
+from torch import Tensor, nn
 from torchvision import models
 
-from utils.functional import freeze_weight
+from src.utils.functional import freeze_weight
 
 
 class ResnetBackbone(nn.Module):
-    def __init__(self, *modules):
+    def __init__(
+        self,
+        depth: int,
+        pretrained: bool = False,
+        num_stages: int = 3,
+        frozen_stages: Optional[int] = None,
+    ):
         super().__init__()
 
-        self._nets = nn.Sequential(*modules)
+        resnet_model = self._get_models(depth, pretrained)
+        layers = (
+            resnet_model.layer1,
+            resnet_model.layer2,
+            resnet_model.layer3,
+            resnet_model.layer4,
+        )
+        self.nets = nn.ModuleList(
+            (
+                resnet_model.conv1,
+                resnet_model.bn1,
+                resnet_model.relu,
+                resnet_model.maxpool,
+            )
+        )
+        if frozen_stages is not None:
+            freeze_weight(self.nets)
 
-    def forward(self, x):
-        return self._nets(x)
+        for i in range(num_stages):
+            if frozen_stages is not None and i < frozen_stages:
+                freeze_weight(layers[i])
+            self.nets.append(layers[i])
 
-    def train(self, mode=True):
-        self.training = mode
-        self._nets.train(mode)
+    def forward(self, x: Tensor):
+        for net in self.nets:
+            x = net(x)
+        return x
 
-        def batchnorm_eval(m):
-            classname = m.__class__.__name__
-
-            if classname.find("BatchNorm") != -1 and m.training:
-                m.eval()
-
-        self._nets.apply(batchnorm_eval)
-        assert not self._nets[1].training
-
-
-def resnet_backbone(layer: int = 50, fixed_blocks=2):
-    assert fixed_blocks >= 0 and fixed_blocks < 4
-
-    if layer == 50:
-        resnet = models.resnet50(pretrained=True)
-    elif layer == 101:
-        resnet = models.resnet101(pretrained=True)
-    else:
-        raise ValueError("Only support resnet 50 or 101 currently")
-
-    freeze_weight(resnet.bn1)
-    freeze_weight(resnet.conv1)
-
-    if fixed_blocks >= 3:
-        freeze_weight(resnet.layer3)
-    if fixed_blocks >= 2:
-        freeze_weight(resnet.layer2)
-    if fixed_blocks >= 1:
-        freeze_weight(resnet.layer1)
-
-    def set_bn_fix(m: nn.Module):
-        classname = m.__class__.__name__
-        if classname.find("BatchNorm") != -1:
-            freeze_weight(m)
-
-    # Fixed batch_norm
-    resnet.apply(set_bn_fix)
-
-    backbone = ResnetBackbone(
-        resnet.conv1,
-        resnet.bn1,
-        resnet.relu,
-        resnet.maxpool,
-        resnet.layer1,
-        resnet.layer2,
-        resnet.layer3,
-    )
-
-    return backbone
+    def _get_models(self, depth: int, pretrained: bool = False):
+        if depth == 50:
+            return models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        elif depth == 101:
+            return models.resnet101(pretrained=models.ResNet101_Weights.DEFAULT)
+        else:
+            raise ValueError(f"Cannot find Resnet version: {depth}")
