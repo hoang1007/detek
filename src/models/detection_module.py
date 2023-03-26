@@ -97,10 +97,16 @@ class DetectionModule(LightningModule):
                 on_step=False,
             )
 
-    def test_step(self, batch: BatchDataSample, batch_idx: int):
+    def predict_step(self, batch: BatchDataSample):
         batch.to(self.device)
 
-        return self(batch.images)
+        det_results = self(batch.images)
+        for image, det_result in zip(batch.images, det_results):
+            assert isinstance(det_result, DetResult)
+            det_result.set_image(image)
+            if self.detector.CLASSES is not None:
+                det_result.set_classes(self.detector.CLASSES)
+        return det_results
 
     def configure_optimizers(self):
         if self.hparams.optimizer is not None:  # type: ignore

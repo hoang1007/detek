@@ -1,4 +1,5 @@
 from typing import List
+
 import torch
 
 from src.structures import ImageInfo
@@ -15,8 +16,7 @@ class RPNTargetGenerator:
         negative_iou_thr: float = 0.3,
         allowed_border: int = 0,
     ):
-        """
-        Produce RPN targets for training.
+        """Produce RPN targets for training.
 
         Args:
             num_samples: Number of samples to generate.
@@ -126,9 +126,7 @@ class RPNTargetGenerator:
 
         # Compute regression targets
         keep_ids = labels != -1
-        reg_targets[keep_ids] = bbox_transform(
-            anchors[keep_ids], gt_boxes[argmax_ious[keep_ids]]
-        )
+        reg_targets[keep_ids] = bbox_transform(anchors[keep_ids], gt_boxes[argmax_ious[keep_ids]])
 
         return reg_targets, labels
 
@@ -142,12 +140,8 @@ class RPNTargetGenerator:
 
         return anchors[inside_ids], inside_ids
 
-    def _unmap(
-        self, data: torch.Tensor, count: int, inds: torch.Tensor, fill: float = 0
-    ):
-        """
-        Unmap a subset of item (data) back to the original set of items (of size count)
-        """
+    def _unmap(self, data: torch.Tensor, count: int, inds: torch.Tensor, fill: float = 0):
+        """Unmap a subset of item (data) back to the original set of items (of size count)"""
         if data.dim() == 1:
             ret = data.new_full((count,), fill)
             ret[inds] = data

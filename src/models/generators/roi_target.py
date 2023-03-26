@@ -1,4 +1,5 @@
 from typing import List
+
 import torch
 
 from src.utils.box_utils import bbox_iou, bbox_transform
@@ -15,8 +16,7 @@ class RoITargetGenerator:
         negative_iou_thr_high: float = 0.5,
         use_gt: bool = True,
     ):
-        """
-        Produce ROI targets for training.
+        """Produce ROI targets for training.
 
         Args:
             num_samples: Number of samples to generate.
@@ -65,18 +65,14 @@ class RoITargetGenerator:
         for proposals, gt_boxes, gt_labels in zip(
             batch_proposals, batch_gt_boxes, batch_gt_labels
         ):
-            reg_targets, labels, roi_samples = self.sample(
-                proposals, gt_boxes, gt_labels
-            )
+            reg_targets, labels, roi_samples = self.sample(proposals, gt_boxes, gt_labels)
             batch_reg_targets.append(reg_targets)
             batch_labels.append(labels)
             batch_roi_samples.append(roi_samples)
 
         return batch_reg_targets, batch_labels, batch_roi_samples
 
-    def sample(
-        self, proposals: torch.Tensor, gt_boxes: torch.Tensor, gt_labels: torch.Tensor
-    ):
+    def sample(self, proposals: torch.Tensor, gt_boxes: torch.Tensor, gt_labels: torch.Tensor):
         ious = bbox_iou(proposals, gt_boxes)
 
         # For each proposal, which gt best overlaps with it
@@ -84,7 +80,7 @@ class RoITargetGenerator:
 
         num_fg = int(self.fg_fraction * self.num_samples)
         fg_ids = torch.nonzero(max_ious >= self.positive_iou_thr).squeeze_(1)
-        
+
         if fg_ids.numel() > num_fg:
             fg_ids = fg_ids[random_choice(fg_ids, num_fg)]
         else:
@@ -92,8 +88,7 @@ class RoITargetGenerator:
 
         num_bg = self.num_samples - num_fg
         bg_ids = torch.nonzero(
-            (max_ious >= self.negative_iou_thr[0])
-            & (max_ious < self.negative_iou_thr[1])
+            (max_ious >= self.negative_iou_thr[0]) & (max_ious < self.negative_iou_thr[1])
         ).squeeze_(1)
 
         if bg_ids.numel() > num_bg:
@@ -108,6 +103,6 @@ class RoITargetGenerator:
         roi_samples = proposals[keep_ids]
         reg_targets = bbox_transform(roi_samples, gt_boxes[argmax_ious[keep_ids]])
         roi_labels = gt_labels[argmax_ious[keep_ids]]
-        roi_labels[num_fg:] = 0 # Assign background labels
+        roi_labels[num_fg:] = 0  # Assign background labels
 
         return reg_targets, roi_labels, roi_samples

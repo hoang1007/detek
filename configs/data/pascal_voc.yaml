@@ -2,9 +2,9 @@ defaults:
   - default.yaml
 
 train_data:
-  _target_: src.data.datasets.VOCDataset
+  _target_: src.datamodules.datasets.VOCDataset
   image_set: train
 
 val_data:
-  _target_: src.data.datasets.VOCDataset
+  _target_: src.datamodules.datasets.VOCDataset
   image_set: val

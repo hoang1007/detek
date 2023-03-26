@@ -1,11 +1,12 @@
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 import torch
 from torch import nn
 from torchvision.ops import nms
 
-from src.structures import ImageInfo
 from src.models.base import BaseModel
 from src.models.generators import AnchorGenerator, RPNTargetGenerator
+from src.structures import ImageInfo
 from src.utils.box_utils import bbox_inv_transform
 
 
@@ -59,23 +60,13 @@ class RPNHead(BaseModel):
         x = self.conv(x)
 
         # (B, 2 * num_base_anchors, H, W) -> (B, H * W * num_base_anchors, 2)
-        rpn_cls = (
-            torch.permute(self.rpn_cls(x), (0, 2, 3, 1))
-            .contiguous()
-            .view(batch_size, -1, 2)
-        )
+        rpn_cls = torch.permute(self.rpn_cls(x), (0, 2, 3, 1)).contiguous().view(batch_size, -1, 2)
         # (B, 4 * num_base_anchors, H, W) -> (B, H * W * num_base_anchors, 4)
-        rpn_reg = (
-            torch.permute(self.rpn_reg(x), (0, 2, 3, 1))
-            .contiguous()
-            .view(batch_size, -1, 4)
-        )
+        rpn_reg = torch.permute(self.rpn_reg(x), (0, 2, 3, 1)).contiguous().view(batch_size, -1, 4)
 
         return rpn_cls, rpn_reg
 
-    def forward_train(
-        self, x: torch.Tensor, gt_bboxes: List[torch.Tensor], im_info: ImageInfo
-    ):
+    def forward_train(self, x: torch.Tensor, gt_bboxes: List[torch.Tensor], im_info: ImageInfo):
         rpn_cls, rpn_reg = self(x)
 
         assert (
@@ -86,9 +77,7 @@ class RPNHead(BaseModel):
         proposals = self.get_proposals(
             rpn_reg.detach(), objectness, anchors, im_info, self.train_nms_cfg
         )
-        rpn_reg_targets, rpn_cls_targets = self.rpn_target_generator(
-            anchors, gt_bboxes, im_info
-        )
+        rpn_reg_targets, rpn_cls_targets = self.rpn_target_generator(anchors, gt_bboxes, im_info)
 
         rpn_cls = rpn_cls.view(-1, 2)
         rpn_cls_targets = rpn_cls_targets.view(-1)
@@ -98,11 +87,11 @@ class RPNHead(BaseModel):
         sample_mask = rpn_cls_targets >= 0
         objectness_mask = rpn_cls_targets > 0
         rpn_reg_loss = nn.functional.smooth_l1_loss(
-            rpn_reg[objectness_mask], rpn_reg_targets[objectness_mask], reduction="mean"
+            rpn_reg[objectness_mask], rpn_reg_targets[objectness_mask], reduction="sum"
         )
-        rpn_cls_loss = nn.functional.cross_entropy(
-            rpn_cls[sample_mask], rpn_cls_targets[sample_mask], reduction="mean"
-        )
+        rpn_reg_loss = 10 * rpn_reg_loss / sample_mask.sum()
+
+        rpn_cls_loss = nn.functional.cross_entropy(rpn_cls, rpn_cls_targets, ignore_index=-1)
 
         return dict(rpn_cls_loss=rpn_cls_loss, rpn_reg_loss=rpn_reg_loss), proposals
 
@@ -110,9 +99,7 @@ class RPNHead(BaseModel):
         rpn_cls, rpn_reg = self(x)
         objectness = torch.softmax(rpn_cls, dim=-1)[:, :, 1]
         anchors = self.anchor_generator(im_info.height, im_info.width)
-        proposals = self.get_proposals(
-            rpn_reg, objectness, anchors, im_info, self.test_nms_cfg
-        )
+        proposals = self.get_proposals(rpn_reg, objectness, anchors, im_info, self.test_nms_cfg)
 
         return proposals, rpn_cls, rpn_reg
 

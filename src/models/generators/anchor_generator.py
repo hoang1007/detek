@@ -1,12 +1,14 @@
 from typing import List
+
 import torch
 from torch import nn
 
 
 class AnchorGenerator(nn.Module):
-    def __init__(self, stride: int, scales: List[float] = [8, 16, 32], ratios: List[float] = [0.5, 1, 2]):
-        """
-        Generate anchors on the image.
+    def __init__(
+        self, stride: int, scales: List[float] = [8, 16, 32], ratios: List[float] = [0.5, 1, 2]
+    ):
+        """Generate anchors on the image.
 
         Args:
             stride (int): Stride of the feature map.
@@ -18,12 +20,12 @@ class AnchorGenerator(nn.Module):
         self.scales = scales
         self.ratios = ratios
 
-        self.register_buffer('base_anchors', self.generate_base_anchors(self.stride))
+        self.register_buffer("base_anchors", self.generate_base_anchors(self.stride))
 
     @property
     def num_base_anchors(self):
-        return self.base_anchors.size(0) # type: ignore
-    
+        return self.base_anchors.size(0)  # type: ignore
+
     def generate_base_anchors(self, base_size: int):
         scales = torch.tensor(self.scales, dtype=torch.float32)
         ratios = torch.tensor(self.ratios, dtype=torch.float32)
@@ -36,7 +38,7 @@ class AnchorGenerator(nn.Module):
 
         base_anchors = torch.stack([-0.5 * ws, -0.5 * hs, 0.5 * ws, 0.5 * hs], dim=-1)
         return base_anchors
-    
+
     def forward(self, img_height: int, img_width: int):
         """Generate anchors for the image size.
 
@@ -50,9 +52,13 @@ class AnchorGenerator(nn.Module):
         base_anchors = self.base_anchors
         assert isinstance(base_anchors, torch.Tensor)
 
-        shifts_x = torch.arange(0, img_width, step=self.stride, device=base_anchors.device, dtype=torch.float32)
-        shifts_y = torch.arange(0, img_height, self.stride, device=base_anchors.device, dtype=torch.float32)
-        shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x, indexing='ij')
+        shifts_x = torch.arange(
+            0, img_width, step=self.stride, device=base_anchors.device, dtype=torch.float32
+        )
+        shifts_y = torch.arange(
+            0, img_height, self.stride, device=base_anchors.device, dtype=torch.float32
+        )
+        shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x, indexing="ij")
         shift_x = shift_x.reshape(-1)
         shift_y = shift_y.reshape(-1)
 

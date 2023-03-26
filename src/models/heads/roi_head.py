@@ -1,11 +1,12 @@
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 import torch
 from torch import nn
-from torchvision.ops import roi_align, roi_pool, batched_nms
+from torchvision.ops import batched_nms, roi_align, roi_pool
 
 from src.models.base import BaseModel
 from src.models.generators import RoITargetGenerator
-from src.structures import ImageInfo, DetResult
+from src.structures import DetResult, ImageInfo
 from src.utils.box_utils import bbox_inv_transform
 
 
@@ -47,12 +48,14 @@ class RoIHead(BaseModel):
         self.test_nms_cfg = test_nms_cfg
 
         if bbox_deltas_normalize_means is not None:
-            self.bbox_deltas_normalize_means = torch.tensor(
-                bbox_deltas_normalize_means, dtype=torch.float32
+            self.register_buffer(
+                "bbox_deltas_normalize_means",
+                torch.tensor(bbox_deltas_normalize_means, dtype=torch.float32),
             )
         if bbox_deltas_normalize_stds is not None:
-            self.bbox_deltas_normalize_stds = torch.tensor(
-                bbox_deltas_normalize_stds, dtype=torch.float32
+            self.register_buffer(
+                "bbox_deltas_normalize_stds",
+                torch.tensor(bbox_deltas_normalize_stds, dtype=torch.float32),
             )
 
         self.feature_extractor = (
@@ -74,9 +77,8 @@ class RoIHead(BaseModel):
         return out_channels, scale
 
     def _bbox_deltas_normalize(self, bbox_detas: torch.Tensor):
-        if (
-            self.bbox_deltas_normalize_means is not None
-            and self.bbox_deltas_normalize_stds is not None
+        if hasattr(self, "bbox_deltas_normalize_means") and hasattr(
+            self, "bbox_deltas_normalize_stds"
         ):
             bbox_detas = (
                 bbox_detas - self.bbox_deltas_normalize_means
@@ -84,13 +86,11 @@ class RoIHead(BaseModel):
         return bbox_detas
 
     def _bbox_deltas_denormalize(self, bbox_deltas: torch.Tensor):
-        if (
-            self.bbox_deltas_normalize_means is not None
-            and self.bbox_deltas_normalize_stds is not None
+        if hasattr(self, "bbox_deltas_normalize_means") and hasattr(
+            self, "bbox_deltas_normalize_stds"
         ):
             bbox_deltas = (
-                bbox_deltas * self.bbox_deltas_normalize_stds
-                + self.bbox_deltas_normalize_means
+                bbox_deltas * self.bbox_deltas_normalize_stds + self.bbox_deltas_normalize_means
             )
         return bbox_deltas
 
@@ -169,18 +169,18 @@ class RoIHead(BaseModel):
         objectness_mask = labels > 0
 
         # Convert bbox targets from (N, 4) to (N, 4 * num_classes)
-        expanded_bbox_targets = bbox_targets.new_zeros(
-            bbox_targets.size(0), self.num_classes, 4
-        )
+        expanded_bbox_targets = bbox_targets.new_zeros(bbox_targets.size(0), self.num_classes, 4)
         expanded_bbox_targets[range(bbox_targets.size(0)), labels] = bbox_targets
         expanded_bbox_targets = expanded_bbox_targets.view(-1, 4 * self.num_classes)
 
         roi_reg_loss = nn.functional.smooth_l1_loss(
-            bbox_reg[objectness_mask], expanded_bbox_targets[objectness_mask]
+            bbox_reg[objectness_mask],
+            expanded_bbox_targets[objectness_mask],
+            reduction="sum",
         )
-        roi_cls_loss = nn.functional.cross_entropy(
-            cls_logits[sample_mask], labels[sample_mask]
-        )
+        roi_reg_loss = 10 * roi_reg_loss / sample_mask.sum()
+
+        roi_cls_loss = nn.functional.cross_entropy(cls_logits, labels, ignore_index=-1)
 
         return dict(roi_reg_loss=roi_reg_loss, roi_cls_loss=roi_cls_loss)
 
@@ -203,6 +203,13 @@ class RoIHead(BaseModel):
             batch_bbox_deltas, batch_cls_logits, batch_proposals
         ):
             conf_scores, labels = nn.functional.softmax(cls_logits, dim=1).max(dim=1)
+            # Filter background predictions
+            keep = labels > 0
+            conf_scores = conf_scores[keep]
+            labels = labels[keep]
+            proposals = proposals[keep]
+            bbox_deltas = bbox_deltas[keep]
+
             bbox_deltas = bbox_deltas.view(-1, self.num_classes, 4)
             bbox_deltas = self._bbox_deltas_denormalize(
                 bbox_deltas[range(bbox_deltas.size(0)), labels]
@@ -216,9 +223,7 @@ class RoIHead(BaseModel):
             labels = labels[keep]
 
             # Apply NMS
-            keep = batched_nms(
-                pred_bboxes, conf_scores, labels, self.test_nms_cfg["nms_thr"]
-            )
+            keep = batched_nms(pred_bboxes, conf_scores, labels, self.test_nms_cfg["nms_thr"])
             pred_bboxes = pred_bboxes[keep]
             conf_scores = conf_scores[keep]
             labels = labels[keep]
@@ -236,14 +241,12 @@ def roi_feature_extractor(arch: str = "resnet50", pretrained: bool = True):
     """
 
     if arch == "resnet50":
-        from torchvision.models import resnet50, ResNet50_Weights
+        from torchvision.models import ResNet50_Weights, resnet50
 
         return resnet50(weights=ResNet50_Weights.DEFAULT if pretrained else None).layer4
     elif arch == "resnet101":
-        from torchvision.models import resnet101, ResNet101_Weights
+        from torchvision.models import ResNet101_Weights, resnet101
 
-        return resnet101(
-            weights=ResNet101_Weights.DEFAULT if pretrained else None
-        ).layer4
+        return resnet101(weights=ResNet101_Weights.DEFAULT if pretrained else None).layer4
     else:
         raise ValueError(f"Invalid architecture: {arch}")

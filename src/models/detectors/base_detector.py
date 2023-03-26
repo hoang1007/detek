@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import torch
 from torch import nn
@@ -8,9 +8,14 @@ from src.structures import DetResult
 
 class BaseDetector(nn.Module):
     def __init__(
-        self, img_normalize_means: List[float], img_normalize_stds: List[float], **kwargs
+        self,
+        img_normalize_means: List[float],
+        img_normalize_stds: List[float],
+        CLASSES: Optional[List[str]] = None,
+        **kwargs
     ):
         super().__init__(**kwargs)
+        self.CLASSES = CLASSES
         self.register_buffer(
             "img_normalize_means", torch.tensor(img_normalize_means).view(1, 3, 1, 1)
         )
