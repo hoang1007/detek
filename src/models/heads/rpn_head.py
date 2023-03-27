@@ -55,7 +55,7 @@ class RPNHead(BaseModel):
         """
         Args:
             x (Tensor): Feature map of shape (B, C, H, W).
-        
+
         Returns:
             rpn_cls (Tensor): Objectness logits for each anchor of shape (B, H * W * num_base_anchors, 2).
             rpn_reg (Tensor): Bounding box regression for each anchor of shape (B, H * W * num_base_anchors, 4).
@@ -64,13 +64,23 @@ class RPNHead(BaseModel):
         x = self.conv(x)
 
         # (B, 2 * num_base_anchors, H, W) -> (B, H * W * num_base_anchors, 2)
-        rpn_cls = torch.permute(self.rpn_cls(x), (0, 2, 3, 1)).contiguous().view(batch_size, -1, 2)
+        rpn_cls = (
+            torch.permute(self.rpn_cls(x), (0, 2, 3, 1))
+            .contiguous()
+            .view(batch_size, -1, 2)
+        )
         # (B, 4 * num_base_anchors, H, W) -> (B, H * W * num_base_anchors, 4)
-        rpn_reg = torch.permute(self.rpn_reg(x), (0, 2, 3, 1)).contiguous().view(batch_size, -1, 4)
+        rpn_reg = (
+            torch.permute(self.rpn_reg(x), (0, 2, 3, 1))
+            .contiguous()
+            .view(batch_size, -1, 4)
+        )
 
         return rpn_cls, rpn_reg
 
-    def forward_train(self, x: torch.Tensor, gt_bboxes: List[torch.Tensor], im_info: ImageInfo):
+    def forward_train(
+        self, x: torch.Tensor, gt_bboxes: List[torch.Tensor], im_info: ImageInfo
+    ):
         """
         Args:
             x (Tensor): Feature map of shape (B, C, H, W).
@@ -83,11 +93,13 @@ class RPNHead(BaseModel):
             self.rpn_target_generator is not None
         ), "RPN target generator is required for training!"
         anchors = self.anchor_generator(im_info.height, im_info.width)
-        objectness = torch.softmax(rpn_cls.clone().detach(), dim=-1)[:, :, 1]
+        objectness = torch.softmax(rpn_cls.detach().clone(), dim=-1)[:, :, 1]
         proposals = self.get_proposals(
-            rpn_reg.clone().detach(), objectness, anchors, im_info, self.train_nms_cfg
+            rpn_reg.detach().clone(), objectness, anchors, im_info, self.train_nms_cfg
         )
-        rpn_reg_targets, rpn_cls_targets = self.rpn_target_generator(anchors, gt_bboxes, im_info)
+        rpn_reg_targets, rpn_cls_targets = self.rpn_target_generator(
+            anchors, gt_bboxes, im_info
+        )
 
         rpn_cls = rpn_cls.view(-1, 2)
         rpn_cls_targets = rpn_cls_targets.view(-1)
@@ -101,7 +113,9 @@ class RPNHead(BaseModel):
         )
         rpn_reg_loss = 10 * rpn_reg_loss / sample_mask.sum()
 
-        rpn_cls_loss = nn.functional.cross_entropy(rpn_cls, rpn_cls_targets, ignore_index=-1)
+        rpn_cls_loss = nn.functional.cross_entropy(
+            rpn_cls, rpn_cls_targets, ignore_index=-1
+        )
 
         return dict(rpn_cls_loss=rpn_cls_loss, rpn_reg_loss=rpn_reg_loss), proposals
 
@@ -109,7 +123,9 @@ class RPNHead(BaseModel):
         rpn_cls, rpn_reg = self(x)
         objectness = torch.softmax(rpn_cls, dim=-1)[:, :, 1]
         anchors = self.anchor_generator(im_info.height, im_info.width)
-        proposals = self.get_proposals(rpn_reg, objectness, anchors, im_info, self.test_nms_cfg)
+        proposals = self.get_proposals(
+            rpn_reg, objectness, anchors, im_info, self.test_nms_cfg
+        )
 
         return proposals, rpn_cls, rpn_reg
 
@@ -135,12 +151,14 @@ class RPNHead(BaseModel):
         batch_objectness = objectness.view(batch_size, -1)
         for proposals, objectness in zip(batch_proposals, batch_objectness):
             # Filter out proposals which are too small
-            keep_ids = (proposals[:, 2] - proposals[:, 0]) >= nms_cfg["min_bbox_size"]
-            keep_ids &= (proposals[:, 3] - proposals[:, 1]) >= nms_cfg["min_bbox_size"]
+            keep_ids = torch.logical_and(
+                (proposals[:, 2] - proposals[:, 0]) >= nms_cfg["min_bbox_size"],
+                (proposals[:, 3] - proposals[:, 1]) >= nms_cfg["min_bbox_size"],
+            )
             proposals = proposals[keep_ids]
             objectness = objectness[keep_ids]
 
-            objectness, order = objectness.sort(descending=True)
+            order = torch.argsort(objectness, descending=True)
 
             if nms_cfg["nms_pre"] > 0:
                 order = order[: nms_cfg["nms_pre"]]
@@ -152,6 +170,7 @@ class RPNHead(BaseModel):
             if nms_cfg["nms_post"] > 0:
                 nms_keep_ids = nms_keep_ids[: nms_cfg["nms_post"]]
             proposals = proposals[nms_keep_ids]
+            objectness = objectness[nms_keep_ids]
             sampled_proposals.append(proposals)
 
         return sampled_proposals

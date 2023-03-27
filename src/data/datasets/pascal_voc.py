@@ -37,7 +37,11 @@ VOC_CLASSES = [
 
 class VOCDataset(BaseDataset):
     def __init__(
-        self, img_size: Tuple[int, int] = (640, 640), root="data", year="2007", image_set="train"
+        self,
+        img_size: Tuple[int, int] = (640, 640),
+        root="data",
+        year="2007",
+        image_set="train",
     ):
         super().__init__(VOC_CLASSES)
         if image_set == "train":
@@ -49,14 +53,29 @@ class VOCDataset(BaseDataset):
                     A.RandomSizedBBoxSafeCrop(
                         width=img_size[0], height=img_size[1], erosion_rate=0.0, p=0.2
                     ),
-                    A.PadIfNeeded(min_height=img_size[1], min_width=img_size[0], value=0, p=1.0),
+                    A.PadIfNeeded(
+                        min_height=img_size[1],
+                        min_width=img_size[0],
+                        value=0,
+                        p=1.0,
+                    ),
                     ToTensorV2(),
                 ),
                 bbox_params=A.BboxParams(format="pascal_voc", label_fields=["labels"]),
             )
         else:
             self.transform = A.Compose(
-                (ToTensorV2(),),
+                (
+                    A.PadIfNeeded(
+                        min_height=None,
+                        min_width=None,
+                        pad_height_divisor=32,
+                        pad_width_divisor=32,
+                        value=0,
+                        p=1.0,
+                    ),
+                    ToTensorV2()
+                ),
                 bbox_params=A.BboxParams(format="pascal_voc", label_fields=["labels"]),
             )
 

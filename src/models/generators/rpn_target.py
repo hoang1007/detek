@@ -130,12 +130,12 @@ class RPNTargetGenerator:
         return reg_targets, labels
 
     def _get_inside_anchors(self, anchors: torch.Tensor, height: int, width: int):
-        inside_ids = (
+        inside_ids = torch.nonzero(
             (anchors[:, 0] >= -self.allowed_border)
             & (anchors[:, 1] >= -self.allowed_border)
             & (anchors[:, 2] < width + self.allowed_border)
             & (anchors[:, 3] < height + self.allowed_border)
-        )
+        ).squeeze_(1)
 
         return anchors[inside_ids], inside_ids
 

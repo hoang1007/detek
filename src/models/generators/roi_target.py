@@ -49,9 +49,6 @@ class RoITargetGenerator:
             batch_labels (list[Tensor]): Labels of shape (N, ) per batch.
             batch_roi_samples (list[Tensor]): Sampled proposals of shape (N, 4) per batch.
         """
-        # Disable gradient computation for proposals
-        batch_proposals = [proposals.clone().detach() for proposals in batch_proposals]
-
         if self.use_gt:
             batch_proposals = [
                 torch.cat((proposals, gt_boxes), dim=0)
@@ -80,30 +77,46 @@ class RoITargetGenerator:
 
         num_fg = int(self.fg_fraction * self.num_samples)
         fg_ids = torch.nonzero(max_ious >= self.positive_iou_thr).squeeze_(1)
-
-        if fg_ids.numel() > num_fg:
-            fg_ids = fg_ids[random_choice(fg_ids, num_fg)]
-        else:
-            num_fg = fg_ids.numel()
-
-        num_bg = self.num_samples - num_fg
         bg_ids = torch.nonzero(
             (max_ious >= self.negative_iou_thr[0]) & (max_ious < self.negative_iou_thr[1])
         ).squeeze_(1)
 
-        if bg_ids.numel() > num_bg:
-            bg_ids = bg_ids[random_choice(bg_ids, num_bg)]
+        if fg_ids.numel() > 0 and bg_ids.numel() > 0:
+            num_fg = min(fg_ids.numel(), num_fg)
+            num_bg = self.num_samples - num_fg
+        elif fg_ids.numel() > 0:
+            num_fg = self.num_samples
+            num_bg = 0
+        elif self.use_gt:
+            raise ValueError("No foreground samples found")
         else:
-            num_bg = bg_ids.numel()
+            num_fg = 0
+            num_bg = self.num_samples
+        assert num_fg + num_bg == self.num_samples
+        fg_ids = fg_ids[random_choice(fg_ids, num_fg, auto_replace=True)]
+        bg_ids = bg_ids[random_choice(bg_ids, num_bg, auto_replace=True)]
+        # if fg_ids.numel() > num_fg:
+        #     fg_ids = fg_ids[random_choice(fg_ids, num_fg)]
+        # else:
+        #     num_fg = fg_ids.numel()
 
-        if self.use_gt:
-            assert num_fg > 0, "No foreground samples found"
+        # num_bg = self.num_samples - num_fg
+        # bg_ids = torch.nonzero(
+        #     (max_ious >= self.negative_iou_thr[0]) & (max_ious < self.negative_iou_thr[1])
+        # ).squeeze_(1)
+
+        # if bg_ids.numel() > num_bg:
+        #     bg_ids = bg_ids[random_choice(bg_ids, num_bg)]
+        # else:
+        #     num_bg = bg_ids.numel()
+
+        # if self.use_gt:
+        #     assert num_fg > 0, "No foreground samples found"
 
         keep_ids = torch.hstack((fg_ids, bg_ids))
         roi_samples = proposals[keep_ids]
         reg_targets = bbox_transform(roi_samples, gt_boxes[argmax_ious[keep_ids]])
-        gt_labels[argmax_ious[bg_ids]] = 0  # Assign background labels
         roi_labels = gt_labels[argmax_ious[keep_ids]]
-        # roi_labels[num_fg:] = 0  # Assign background labels
+        roi_labels[num_fg:] = 0  # Assign background labels
 
         return reg_targets, roi_labels, roi_samples

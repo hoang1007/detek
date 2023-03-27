@@ -17,7 +17,7 @@ class RoIHead(BaseModel):
         in_channels: int,
         num_classes: int,
         use_roi_align: bool = True,
-        sampling_ratio: int = 0,
+        sampling_ratio: int = -1,
         feature_extractor: Optional[nn.Module] = None,
         roi_target_generator: Optional[RoITargetGenerator] = None,
         bbox_deltas_normalize_means: Optional[List[float]] = None,
@@ -90,7 +90,8 @@ class RoIHead(BaseModel):
             self, "bbox_deltas_normalize_stds"
         ):
             bbox_deltas = (
-                bbox_deltas * self.bbox_deltas_normalize_stds + self.bbox_deltas_normalize_means
+                bbox_deltas * self.bbox_deltas_normalize_stds
+                + self.bbox_deltas_normalize_means
             )
         return bbox_deltas
 
@@ -102,6 +103,9 @@ class RoIHead(BaseModel):
             im_info (ImageInfo): Information about the image.
         """
         assert len(rois) == x.size(0), "Number of rois must match batch size"
+        assert (
+            im_info.width % x.size(3) == 0 and im_info.height % x.size(2) == 0
+        ), "Image size must be divisible by feature map size. "
         spatial_scale = x.size(3) / im_info.width
 
         if self.use_roi_align:
@@ -168,7 +172,9 @@ class RoIHead(BaseModel):
         objectness_mask = labels > 0
 
         # Expand bbox targets from (N, 4) to (N, 4 * num_classes)
-        expanded_bbox_targets = bbox_targets.new_zeros(bbox_targets.size(0), self.num_classes, 4)
+        expanded_bbox_targets = bbox_targets.new_zeros(
+            bbox_targets.size(0), self.num_classes, 4
+        )
         expanded_bbox_targets[range(bbox_targets.size(0)), labels] = bbox_targets
         expanded_bbox_targets = expanded_bbox_targets.view(-1, 4 * self.num_classes)
 
@@ -222,7 +228,9 @@ class RoIHead(BaseModel):
             labels = labels[keep]
 
             # Apply NMS
-            keep = batched_nms(pred_bboxes, conf_scores, labels, self.test_nms_cfg["nms_thr"])
+            keep = batched_nms(
+                pred_bboxes, conf_scores, labels, self.test_nms_cfg["nms_thr"]
+            )
             pred_bboxes = pred_bboxes[keep]
             conf_scores = conf_scores[keep]
             labels = labels[keep]
@@ -246,6 +254,8 @@ def roi_feature_extractor(arch: str = "resnet50", pretrained: bool = True):
     elif arch == "resnet101":
         from torchvision.models import ResNet101_Weights, resnet101
 
-        return resnet101(weights=ResNet101_Weights.DEFAULT if pretrained else None).layer4
+        return resnet101(
+            weights=ResNet101_Weights.DEFAULT if pretrained else None
+        ).layer4
     else:
         raise ValueError(f"Invalid architecture: {arch}")
