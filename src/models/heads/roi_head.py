@@ -207,7 +207,7 @@ class RoIHead(BaseModel):
         for bbox_deltas, cls_logits, proposals in zip(
             batch_bbox_deltas, batch_cls_logits, batch_proposals
         ):
-            conf_scores, labels = nn.functional.softmax(cls_logits, dim=1).max(dim=1)
+            conf_scores, labels = nn.functional.softmax(cls_logits, dim=-1).max(dim=-1)
             # Filter background predictions
             keep = labels > 0
             conf_scores = conf_scores[keep]

@@ -14,6 +14,7 @@ class RPNTargetGenerator:
         fg_fraction: float = 0.5,
         positive_iou_thr: float = 0.7,
         negative_iou_thr: float = 0.3,
+        min_positive_thr: float = 0.1,
         allowed_border: int = 0,
     ):
         """Produce RPN targets for training.
@@ -29,6 +30,7 @@ class RPNTargetGenerator:
         self.fg_fraction = fg_fraction
         self.positive_iou_thr = positive_iou_thr
         self.negative_iou_thr = negative_iou_thr
+        self.min_positive_iou_thr = min_positive_thr
         self.allowed_border = allowed_border
 
     def __call__(
@@ -94,6 +96,7 @@ class RPNTargetGenerator:
         # 1. Assign step
         # Compute IoU between anchors and ground-truth bboxes.
         ious = bbox_iou(anchors, gt_boxes)
+        assert ious.min() >= 0
 
         # For each anchor, which gt best overlaps with it
         max_ious, argmax_ious = ious.max(dim=1)  # (N, )
@@ -101,8 +104,10 @@ class RPNTargetGenerator:
         gt_max_ious, gt_argmax_ious = ious.max(dim=0)  # (K, )
 
         labels[max_ious < self.negative_iou_thr] = 0
-        labels[gt_argmax_ious] = 1
         labels[max_ious >= self.positive_iou_thr] = 1
+        for i in range(num_gts):
+            if gt_max_ious[i] >= self.min_positive_iou_thr:
+                labels[gt_argmax_ious[i]] = 1
 
         # 2. Sampling step
         num_fg = int(self.fg_fraction * self.num_samples)

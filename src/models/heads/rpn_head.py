@@ -162,7 +162,7 @@ class RPNHead(BaseModel):
 
             if nms_cfg["nms_pre"] > 0:
                 order = order[: nms_cfg["nms_pre"]]
-                objectness = objectness[order]
+            objectness = objectness[order]
             proposals = proposals[order]
 
             nms_keep_ids = nms(proposals, objectness, nms_cfg["nms_thr"])
