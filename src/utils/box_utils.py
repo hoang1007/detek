@@ -95,14 +95,14 @@ def bbox_inv_transform(
         tar_boxes: Target boxes in `(x_tl, y_tl, x_br, y_br)` format. Shape (N, 4)
     """
 
-    cxs, cxs, ws, hs = xyxy2cxcywh(src_boxes).T
+    cxs, cys, ws, hs = xyxy2cxcywh(src_boxes).T
     tx, ty, tw, th = tar_deltas.T
 
-    tw = torch.clamp(tw, max=clamp_thresh)
-    th = torch.clamp(th, max=clamp_thresh)
+    # tw = torch.clamp(tw, max=clamp_thresh)
+    # th = torch.clamp(th, max=clamp_thresh)
 
     tar_cxs = tx * ws + cxs
-    tar_cys = ty * hs + cxs
+    tar_cys = ty * hs + cys
     tar_ws = torch.exp(tw) * ws
     tar_hs = torch.exp(th) * hs
 
