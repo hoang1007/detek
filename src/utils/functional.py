@@ -41,6 +41,7 @@ def random_choice(input: torch.Tensor, num_samples: int, replacement=False, auto
     if replacement:
         ids = torch.randint(input.size(0), size=(num_samples,), dtype=dtype, device=device)
     else:
-        ids = torch.randperm(input.size(0), dtype=dtype, device=device)[:num_samples]
+        # Random permutation on CPU due to a bug in PyTorch
+        ids = torch.randperm(input.size(0), dtype=dtype)[:num_samples].to(device)
 
     return ids
