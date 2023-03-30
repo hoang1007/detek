@@ -28,27 +28,30 @@ model:
     T_max: 20
     eta_min: 0.00001
   detector:
-    CLASSES: ["__background__",
-            "aeroplane",
-            "bicycle",
-            "bird",
-            "boat",
-            "bottle",
-            "bus",
-            "car",
-            "cat",
-            "chair",
-            "cow",
-            "diningtable",
-            "dog",
-            "horse",
-            "motorbike",
-            "person",
-            "pottedplant",
-            "sheep",
-            "sofa",
-            "train",
-            "tvmonitor"]
+    CLASSES:
+      [
+        "__background__",
+        "aeroplane",
+        "bicycle",
+        "bird",
+        "boat",
+        "bottle",
+        "bus",
+        "car",
+        "cat",
+        "chair",
+        "cow",
+        "diningtable",
+        "dog",
+        "horse",
+        "motorbike",
+        "person",
+        "pottedplant",
+        "sheep",
+        "sofa",
+        "train",
+        "tvmonitor",
+      ]
 
 data:
   batch_size: 4

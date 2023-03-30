@@ -90,8 +90,7 @@ class RoIHead(BaseModel):
             self, "bbox_deltas_normalize_stds"
         ):
             bbox_deltas = (
-                bbox_deltas * self.bbox_deltas_normalize_stds
-                + self.bbox_deltas_normalize_means
+                bbox_deltas * self.bbox_deltas_normalize_stds + self.bbox_deltas_normalize_means
             )
         return bbox_deltas
 
@@ -171,19 +170,12 @@ class RoIHead(BaseModel):
         assert sample_mask.sum() == bbox_targets.size(0), "Check roi sampler"
         objectness_mask = labels > 0
 
-        # Expand bbox targets from (N, 4) to (N, 4 * num_classes)
-        expanded_bbox_targets = bbox_targets.new_zeros(
-            bbox_targets.size(0), self.num_classes, 4
-        )
-        expanded_bbox_targets[range(bbox_targets.size(0)), labels] = bbox_targets
-        expanded_bbox_targets = expanded_bbox_targets.view(-1, 4 * self.num_classes)
+        bbox_reg = bbox_reg.view(-1, self.num_classes, 4)
+        bbox_reg = bbox_reg[range(bbox_reg.size(0)), labels]
 
-        roi_reg_loss = nn.functional.smooth_l1_loss(
-            bbox_reg[objectness_mask],
-            expanded_bbox_targets[objectness_mask],
-            reduction="sum",
+        roi_reg_loss = 10 * nn.functional.smooth_l1_loss(
+            bbox_reg[objectness_mask], bbox_targets[objectness_mask], beta=1 / 9
         )
-        roi_reg_loss = 10 * roi_reg_loss / sample_mask.sum()
 
         roi_cls_loss = nn.functional.cross_entropy(cls_logits, labels, ignore_index=-1)
 
@@ -228,9 +220,7 @@ class RoIHead(BaseModel):
             labels = labels[keep]
 
             # Apply NMS
-            keep = batched_nms(
-                pred_bboxes, conf_scores, labels, self.test_nms_cfg["nms_thr"]
-            )
+            keep = batched_nms(pred_bboxes, conf_scores, labels, self.test_nms_cfg["nms_thr"])
             pred_bboxes = pred_bboxes[keep]
             conf_scores = conf_scores[keep]
             labels = labels[keep]
@@ -254,8 +244,6 @@ def roi_feature_extractor(arch: str = "resnet50", pretrained: bool = True):
     elif arch == "resnet101":
         from torchvision.models import ResNet101_Weights, resnet101
 
-        return resnet101(
-            weights=ResNet101_Weights.DEFAULT if pretrained else None
-        ).layer4
+        return resnet101(weights=ResNet101_Weights.DEFAULT if pretrained else None).layer4
     else:
         raise ValueError(f"Invalid architecture: {arch}")

@@ -74,7 +74,7 @@ class VOCDataset(BaseDataset):
                         value=0,
                         p=1.0,
                     ),
-                    ToTensorV2()
+                    ToTensorV2(),
                 ),
                 bbox_params=A.BboxParams(format="pascal_voc", label_fields=["labels"]),
             )

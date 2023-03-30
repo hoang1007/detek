@@ -1,4 +1,5 @@
 from typing import List, Optional
+
 from torch import Tensor
 
 
@@ -12,7 +13,7 @@ class DetResult:
 
     def set_image(self, image: Tensor):
         self._image = image
-    
+
     def set_classes(self, classes: List[str]):
         self._classes = classes
 
@@ -33,10 +34,9 @@ class DetResult:
         if self._image is None:
             raise ValueError("Image is not set")
         return self._image.clone()
-    
+
     def visualize(self, backend: str = "cv2"):
-        """
-        Visualize the detection result
+        """Visualize the detection result.
 
         Args:
             backend (str, optional): Backend to use `cv2`, `matplot` or `none`. Defaults to "cv2".
@@ -44,6 +44,7 @@ class DetResult:
         if self._image is None:
             raise ValueError("Image is not set")
         from torchvision.utils import draw_bounding_boxes
+
         labels = None
         if self._classes is not None:
             labels = [self._classes[label] for label in self._labels.tolist()]
@@ -53,9 +54,11 @@ class DetResult:
             return image
         elif backend == "cv2":
             import cv2
+
             cv2.imshow("image", image[[2, 1, 0]].moveaxis(0, -1).numpy())
             cv2.waitKey(0)
         elif backend == "matplot":
             import matplotlib.pyplot as plt
+
             plt.imshow(image.moveaxis(0, -1).numpy())
             plt.show()

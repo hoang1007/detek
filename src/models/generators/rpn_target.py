@@ -130,7 +130,9 @@ class RPNTargetGenerator:
 
         # Compute regression targets
         valid_ids = labels != -1
-        reg_targets[valid_ids] = bbox_transform(anchors[valid_ids], gt_boxes[argmax_ious[valid_ids]])
+        reg_targets[valid_ids] = bbox_transform(
+            anchors[valid_ids], gt_boxes[argmax_ious[valid_ids]]
+        )
 
         return reg_targets, labels
 
