@@ -181,12 +181,12 @@ class RoIHead(BaseModel):
         bbox_reg = torch.cat(bbox_reg, dim=0)
         cls_logits = torch.cat(cls_logits, dim=0)
 
-        sample_mask = labels >= 0
-        assert sample_mask.sum() == bbox_targets.size(0), "Check roi sampler"
-        objectness_mask = labels > 0
-
+        # Only get the box regression corresponding to the foreground classes
         bbox_reg = bbox_reg.view(-1, self.num_classes, 4)
         bbox_reg = bbox_reg[range(bbox_reg.size(0)), labels]
+
+        sample_mask = labels >= 0
+        objectness_mask = labels > 0
 
         roi_reg_loss = 10 * nn.functional.smooth_l1_loss(
             bbox_reg[objectness_mask], bbox_targets[objectness_mask], beta=1 / 9
@@ -196,7 +196,7 @@ class RoIHead(BaseModel):
         # Set background class weight to num_fg / num_bg
         if self.train_cfg.get("adaptive_cls_weight", False):
             class_weights[0] = objectness_mask.sum() / (sample_mask.sum() - objectness_mask.sum())
-        roi_cls_loss = nn.functional.cross_entropy(cls_logits, labels, weight=class_weights)
+        roi_cls_loss = nn.functional.cross_entropy(cls_logits[sample_mask], labels[sample_mask], weight=class_weights)
 
         return dict(roi_reg_loss=roi_reg_loss, roi_cls_loss=roi_cls_loss)
 
@@ -240,7 +240,6 @@ class RoIHead(BaseModel):
 
             if "nms" in self.test_cfg:
                 nms_cfg = self.test_cfg["nms"]
-                assert isinstance(nms_cfg, dict), "nms_cfg should be a dict"
                 # Apply NMS
                 keep = batched_nms(pred_bboxes, conf_scores, labels, nms_cfg.get("iou_thr", 0.5))
                 pred_bboxes = pred_bboxes[keep]

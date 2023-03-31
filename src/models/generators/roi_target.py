@@ -70,6 +70,20 @@ class RoITargetGenerator:
         return batch_reg_targets, batch_labels, batch_roi_samples
 
     def sample(self, proposals: torch.Tensor, gt_boxes: torch.Tensor, gt_labels: torch.Tensor):
+        num_proposals = proposals.size(0)
+        num_gt_boxes = gt_boxes.size(0)
+
+        if num_proposals == 0:
+            reg_targets = proposals.new_zeros((self.num_samples, 4))
+            roi_labels = gt_labels.new_full((self.num_samples,), -1)
+            roi_samples = proposals.new_zeros((self.num_samples, 4))
+            return reg_targets, roi_labels, roi_samples
+        elif num_gt_boxes == 0:
+            reg_targets = proposals.new_zeros((self.num_samples, 4))
+            roi_labels = gt_labels.new_full((self.num_samples,), 0)
+            roi_samples = proposals[random_choice(proposals, self.num_samples)]
+            return reg_targets, roi_labels, roi_samples
+
         ious = bbox_iou(proposals, gt_boxes)
 
         # For each proposal, which gt best overlaps with it

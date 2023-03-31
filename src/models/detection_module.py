@@ -3,7 +3,6 @@ from typing import Dict, List, Optional
 import torch
 from pytorch_lightning import LightningModule
 from torch import optim
-from torchmetrics import Accuracy
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 from src.structures import BatchDataSample, DetResult
@@ -26,7 +25,6 @@ class DetectionModule(LightningModule):
         self.save_hyperparameters(logger=False)
 
         self.ap_metric = MeanAveragePrecision()
-        self.accuracy = Accuracy(task="multiclass", num_classes=self.detector.num_classes)
         self.detector.init_weights()
 
     def forward(
@@ -68,8 +66,6 @@ class DetectionModule(LightningModule):
 
         preds = []
         gts = []
-        pred_labels = []
-        gt_labels = []
         for det_result in det_results:
             assert isinstance(det_result, DetResult)
             preds.append(
@@ -79,7 +75,6 @@ class DetectionModule(LightningModule):
                     "scores": det_result.scores,
                 }
             )
-            pred_labels.append(det_result.labels)
 
         for i in range(len(batch)):
             gts.append(
@@ -88,10 +83,8 @@ class DetectionModule(LightningModule):
                     "labels": batch.labels[i],
                 }
             )
-            gt_labels.append(batch.labels[i])
 
         self.ap_metric.update(preds, gts)
-        self.accuracy.update(pred_labels, gt_labels)
 
     def validation_epoch_end(self, outputs):
         ap_metrics = self.ap_metric.compute()
@@ -103,15 +96,6 @@ class DetectionModule(LightningModule):
                 on_epoch=True,
                 on_step=False,
             )
-
-        acc = self.accuracy.compute()
-        self.log(
-            "val/acc",
-            acc,
-            prog_bar=True,
-            on_epoch=True,
-            on_step=False,
-        )
 
     def predict_step(self, batch: BatchDataSample):
         batch.to(self.device)

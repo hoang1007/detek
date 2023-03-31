@@ -39,6 +39,7 @@ class VOCDataset(BaseDataset):
     def __init__(
         self,
         img_size: Tuple[int, int] = (640, 640),
+        min_box_size: int = 0,
         root="data",
         year="2007",
         image_set="train",
@@ -79,6 +80,7 @@ class VOCDataset(BaseDataset):
                 bbox_params=A.BboxParams(format="pascal_voc", label_fields=["labels"]),
             )
 
+        self.min_box_size = min_box_size
         self._data = VOCDetection(
             root=root,
             year=year,
@@ -95,6 +97,11 @@ class VOCDataset(BaseDataset):
         for obj_info in info["annotation"]["object"]:
             label_name = obj_info["name"]
             bndbox = [int(k) for k in obj_info["bndbox"].values()]
+
+            width = bndbox[2] - bndbox[0]
+            height = bndbox[3] - bndbox[1]
+            if width < self.min_box_size or height < self.min_box_size:
+                continue
 
             gt_boxes.append(bndbox)
             labels.append(self.get_class_idx(label_name))

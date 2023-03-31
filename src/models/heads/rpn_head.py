@@ -105,12 +105,13 @@ class RPNHead(BaseModel):
         rpn_reg = rpn_reg.view(-1, 4)
         rpn_reg_targets = rpn_reg_targets.view(-1, 4)
 
+        sample_mask = rpn_cls_targets >= 0
         objectness_mask = rpn_cls_targets > 0
         rpn_reg_loss = 10 * nn.functional.l1_loss(
             rpn_reg[objectness_mask], rpn_reg_targets[objectness_mask]
         )
 
-        rpn_cls_loss = nn.functional.cross_entropy(rpn_cls, rpn_cls_targets, ignore_index=-1)
+        rpn_cls_loss = nn.functional.cross_entropy(rpn_cls[sample_mask], rpn_cls_targets[sample_mask])
 
         return dict(rpn_cls_loss=rpn_cls_loss, rpn_reg_loss=rpn_reg_loss), proposals
 
@@ -132,7 +133,6 @@ class RPNHead(BaseModel):
     ):
         if "nms" in proposals_cfg:
             nms_cfg = proposals_cfg["nms"]
-            assert isinstance(nms_cfg, dict), "nms config should be a dict"
         else:
             nms_cfg = None
 
