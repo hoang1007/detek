@@ -25,6 +25,7 @@ class DetectionModule(LightningModule):
         self.save_hyperparameters(logger=False)
 
         self.ap_metric = MeanAveragePrecision()
+        self.detector.init_weights()
 
     def forward(
         self,

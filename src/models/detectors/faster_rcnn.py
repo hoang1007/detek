@@ -16,6 +16,10 @@ class FasterRCNN(BaseDetector):
         self.rpn_head = rpn_head
         self.roi_head = roi_head
 
+    def init_weights(self):
+        self.rpn_head.init_weights()
+        self.roi_head.init_weights()
+
     def forward_train(
         self,
         images: torch.Tensor,

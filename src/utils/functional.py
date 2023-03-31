@@ -2,15 +2,17 @@ import torch
 from torch import nn
 
 
-def init_weight(model: nn.Module, std=0.01):
-    model.weight.data.normal_(std=std)  # type: ignore
+def init_weight(module: nn.Module):
+    if isinstance(module, nn.Linear):
+        module.weight.data.normal_(mean=0.0, std=0.01)
+    elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
+        module.bias.data.zero_()
+        module.weight.data.fill_(1.0)
+    elif isinstance(module, torch.nn.Conv2d):
+        nn.init.kaiming_normal_(module.weight.data)
 
-    try:
-        model.bias.data.normal_(std=std)  # type: ignore
-    except ValueError:
-        print("Cannot init bias for model: ", model)
-
-    return model
+    if isinstance(module, (nn.Linear, nn.Conv2d)) and module.bias is not None:
+        module.bias.data.zero_()
 
 
 def freeze_weight(model: nn.Module):

@@ -3,6 +3,9 @@ from torch.nn import Module
 
 
 class BaseModel(Module):
+    def init_weights(self):
+        pass
+
     def forward_train(self, *args, **kwargs):
         raise NotImplementedError
 

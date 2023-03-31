@@ -8,6 +8,7 @@ from src.models.base import BaseModel
 from src.models.generators import AnchorGenerator, RPNTargetGenerator
 from src.structures import ImageInfo
 from src.utils.box_utils import bbox_inv_transform
+from src.utils.functional import init_weight
 
 
 class RPNHead(BaseModel):
@@ -50,6 +51,12 @@ class RPNHead(BaseModel):
         self.rpn_reg = nn.Conv2d(
             feat_channels, 4 * anchor_generator.num_base_anchors, kernel_size=1
         )
+
+    def init_weights(self):
+        for m in self.conv.modules():
+            init_weight(m)
+        init_weight(self.rpn_cls)
+        init_weight(self.rpn_reg)
 
     def forward(self, x: torch.Tensor):
         """

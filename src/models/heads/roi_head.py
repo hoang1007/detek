@@ -8,6 +8,7 @@ from src.models.base import BaseModel
 from src.models.generators import RoITargetGenerator
 from src.structures import DetResult, ImageInfo
 from src.utils.box_utils import bbox_inv_transform
+from src.utils.functional import init_weight
 
 
 class RoIHead(BaseModel):
@@ -67,6 +68,10 @@ class RoIHead(BaseModel):
         self.avg_pool = nn.AvgPool2d(self.roi_feat_size)
         self.fc_cls = nn.Linear(hidden_channels, num_classes)
         self.fc_bbox = nn.Linear(hidden_channels, 4 * num_classes)
+
+    def init_weights(self):
+        init_weight(self.fc_bbox)
+        init_weight(self.fc_cls)
 
     def _get_feat_extractor_dim(self):
         dump = torch.zeros(1, self.in_channels, 64, 64)
@@ -177,7 +182,10 @@ class RoIHead(BaseModel):
             bbox_reg[objectness_mask], bbox_targets[objectness_mask], beta=1 / 9
         )
 
-        roi_cls_loss = nn.functional.cross_entropy(cls_logits, labels, ignore_index=-1)
+        class_weights = cls_logits.new_ones(self.num_classes)
+        # Set background class weight to num_fg / num_bg
+        class_weights[0] = objectness_mask.sum() / (labels.size(0) - objectness_mask.sum())
+        roi_cls_loss = nn.functional.cross_entropy(cls_logits, labels, weight=class_weights)
 
         return dict(roi_reg_loss=roi_reg_loss, roi_cls_loss=roi_cls_loss)
 

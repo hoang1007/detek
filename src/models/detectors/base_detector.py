@@ -3,10 +3,11 @@ from typing import Dict, List, Optional
 import torch
 from torch import nn
 
+from src.models.base import BaseModel
 from src.structures import DetResult
 
 
-class BaseDetector(nn.Module):
+class BaseDetector(BaseModel):
     def __init__(
         self,
         img_normalize_means: List[float],
