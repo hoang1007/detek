@@ -60,7 +60,7 @@ detector:
       fg_fraction: 0.25
       positive_iou_thr: 0.5
       negative_iou_thr_low: 0.0
-      negative_iou_thr_high: 0.3
+      negative_iou_thr_high: 0.5
       use_gt: true
     bbox_deltas_normalize_means: [0, 0, 0, 0]
     bbox_deltas_normalize_stds: [0.1, 0.1, 0.2, 0.2]
