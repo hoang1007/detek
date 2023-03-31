@@ -5,7 +5,6 @@ optimizer:
   _target_: torch.optim.SGD
   lr: 0.01
   momentum: 0.9
-  nesterov: true
   weight_decay: 0.0001
 
 detector:
@@ -17,7 +16,7 @@ detector:
     depth: 50
     pretrained: True
     num_stages: 3
-    frozen_stages: 1
+    frozen_stages: 2
   rpn_head:
     _target_: src.models.heads.RPNHead
     in_channels: 1024
@@ -34,22 +33,25 @@ detector:
       positive_iou_thr: 0.7
       negative_iou_thr: 0.3
       allowed_border: 4
-    train_nms_cfg:
-      nms_pre: 12000
-      nms_post: 2000
-      nms_thr: 0.7
+    train_cfg:
       min_bbox_size: 0
-    test_nms_cfg:
-      nms_pre: 6000
-      nms_post: 1000
-      nms_thr: 0.7
+      nms:
+        iou_thr: 0.7
+        num_pre_proposals: 12000
+        num_post_proposals: 2000
+    test_cfg:
       min_bbox_size: 0
+      nms:
+        iou_thr: 0.7
+        num_pre_proposals: 6000
+        num_post_proposals: 1000
   roi_head:
     _target_: src.models.heads.RoIHead
     roi_size: 14
     in_channels: 1024
     num_classes: 21
     use_roi_align: true
+    use_avg_pooling: false
     feature_extractor:
       _target_: src.models.heads.roi_head.roi_feature_extractor
       arch: resnet50
@@ -64,6 +66,9 @@ detector:
       use_gt: true
     bbox_deltas_normalize_means: [0, 0, 0, 0]
     bbox_deltas_normalize_stds: [0.1, 0.1, 0.2, 0.2]
-    test_nms_cfg:
-      nms_thr: 0.7
+    train_cfg:
+      adaptive_cls_weight: false
+    test_cfg:
       score_thr: 0.01
+      nms:
+        iou_thr: 0.7

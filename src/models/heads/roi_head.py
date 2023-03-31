@@ -18,12 +18,14 @@ class RoIHead(BaseModel):
         in_channels: int,
         num_classes: int,
         use_roi_align: bool = True,
+        use_avg_pooling: bool = False,
         sampling_ratio: int = -1,
         feature_extractor: Optional[nn.Module] = None,
         roi_target_generator: Optional[RoITargetGenerator] = None,
         bbox_deltas_normalize_means: Optional[List[float]] = None,
         bbox_deltas_normalize_stds: Optional[List[float]] = None,
-        test_nms_cfg: Dict[str, float] = dict(nms_thr=0.7, score_thr=0.01),
+        train_cfg: Optional[Dict] = dict(adaptive_cls_weight=False),
+        test_cfg: Optional[Dict] = dict(score_thr=0.01, nms=dict(iou_thr=0.7)),
     ):
         """
         Args:
@@ -44,9 +46,11 @@ class RoIHead(BaseModel):
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.use_roi_align = use_roi_align
+        self.use_avg_pooling = use_avg_pooling
         self.sampling_ratio = sampling_ratio
         self.roi_target_generator = roi_target_generator
-        self.test_nms_cfg = test_nms_cfg
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
 
         if bbox_deltas_normalize_means is not None:
             self.register_buffer(
@@ -65,7 +69,11 @@ class RoIHead(BaseModel):
         hidden_channels, scale = self._get_feat_extractor_dim()
         self.roi_feat_size = int(self.roi_size * scale)
 
-        self.avg_pool = nn.AvgPool2d(self.roi_feat_size)
+        if self.use_avg_pooling:
+            self.avg_pool = nn.AvgPool2d(self.roi_feat_size)
+        else:
+            hidden_channels *= self.roi_feat_size**2
+
         self.fc_cls = nn.Linear(hidden_channels, num_classes)
         self.fc_bbox = nn.Linear(hidden_channels, 4 * num_classes)
 
@@ -129,7 +137,9 @@ class RoIHead(BaseModel):
             )  # type: ignore
 
         roi_features = self.feature_extractor(roi_features)
-        roi_features = self.avg_pool(roi_features).flatten(start_dim=1)
+        if self.use_avg_pooling:
+            roi_features = self.avg_pool(roi_features)
+        roi_features = torch.flatten(roi_features, start_dim=1)
 
         bbox_reg = self.fc_bbox(roi_features)
         cls_logits = self.fc_cls(roi_features)
@@ -184,7 +194,8 @@ class RoIHead(BaseModel):
 
         class_weights = cls_logits.new_ones(self.num_classes)
         # Set background class weight to num_fg / num_bg
-        class_weights[0] = objectness_mask.sum() / (labels.size(0) - objectness_mask.sum())
+        if self.train_cfg.get("adaptive_cls_weight", False):
+            class_weights[0] = objectness_mask.sum() / (sample_mask.sum() - objectness_mask.sum())
         roi_cls_loss = nn.functional.cross_entropy(cls_logits, labels, weight=class_weights)
 
         return dict(roi_reg_loss=roi_reg_loss, roi_cls_loss=roi_cls_loss)
@@ -222,16 +233,19 @@ class RoIHead(BaseModel):
             pred_bboxes = bbox_inv_transform(proposals, bbox_deltas)
 
             # Filter out predictions with low confidence
-            keep = conf_scores > self.test_nms_cfg.get("score_thr", 0)
+            keep = conf_scores > self.test_cfg.get("score_thr", 0)
             pred_bboxes = pred_bboxes[keep]
             conf_scores = conf_scores[keep]
             labels = labels[keep]
 
-            # Apply NMS
-            keep = batched_nms(pred_bboxes, conf_scores, labels, self.test_nms_cfg["nms_thr"])
-            pred_bboxes = pred_bboxes[keep]
-            conf_scores = conf_scores[keep]
-            labels = labels[keep]
+            if "nms" in self.test_cfg:
+                nms_cfg = self.test_cfg["nms"]
+                assert isinstance(nms_cfg, dict), "nms_cfg should be a dict"
+                # Apply NMS
+                keep = batched_nms(pred_bboxes, conf_scores, labels, nms_cfg.get("iou_thr", 0.5))
+                pred_bboxes = pred_bboxes[keep]
+                conf_scores = conf_scores[keep]
+                labels = labels[keep]
 
             results.append(DetResult(pred_bboxes, conf_scores, labels))
 

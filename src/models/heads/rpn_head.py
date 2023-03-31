@@ -18,25 +18,29 @@ class RPNHead(BaseModel):
         feat_channels: int,
         anchor_generator: AnchorGenerator,
         rpn_target_generator: Optional[RPNTargetGenerator] = None,
-        train_nms_cfg: Dict[str, float] = dict(
-            nms_pre=12000,
-            nms_post=2000,
-            nms_thr=0.7,
-            min_bbox_size=0,
+        train_cfg: Optional[Dict] = dict(
+            min_box_size=0,
+            nms=dict(
+                num_pre_proposals=12000,
+                num_post_proposals=2000,
+                iou_thr=0.7,
+            ),
         ),
-        test_nms_cfg: Dict[str, float] = dict(
-            nms_pre=6000,
-            nms_post=1000,
-            nms_thr=0.7,
-            min_bbox_size=0,
+        test_cfg: Optional[Dict] = dict(
+            min_box_size=0,
+            nms=dict(
+                num_pre_proposals=6000,
+                num_post_proposals=1000,
+                iou_thr=0.7,
+            ),
         ),
     ):
         super().__init__()
 
         self.anchor_generator = anchor_generator
         self.rpn_target_generator = rpn_target_generator
-        self.train_nms_cfg = train_nms_cfg
-        self.test_nms_cfg = test_nms_cfg
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
 
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, feat_channels, kernel_size=3, stride=1, padding=1),
@@ -92,7 +96,7 @@ class RPNHead(BaseModel):
         anchors = self.anchor_generator(im_info.height, im_info.width)
         objectness = torch.softmax(rpn_cls.detach().clone(), dim=-1)[:, :, 1]
         proposals = self.get_proposals(
-            rpn_reg.detach().clone(), objectness, anchors, im_info, self.train_nms_cfg
+            rpn_reg.detach().clone(), objectness, anchors, im_info, self.train_cfg
         )
         rpn_reg_targets, rpn_cls_targets = self.rpn_target_generator(anchors, gt_bboxes, im_info)
 
@@ -114,7 +118,7 @@ class RPNHead(BaseModel):
         rpn_cls, rpn_reg = self(x)
         objectness = torch.softmax(rpn_cls, dim=-1)[:, :, 1]
         anchors = self.anchor_generator(im_info.height, im_info.width)
-        proposals = self.get_proposals(rpn_reg, objectness, anchors, im_info, self.test_nms_cfg)
+        proposals = self.get_proposals(rpn_reg, objectness, anchors, im_info, self.test_cfg)
 
         return proposals, rpn_cls, rpn_reg
 
@@ -124,8 +128,14 @@ class RPNHead(BaseModel):
         objectness: torch.Tensor,
         anchors: torch.Tensor,
         im_info: ImageInfo,
-        nms_cfg: Dict[str, float],
+        proposals_cfg: Dict[str, float],
     ):
+        if "nms" in proposals_cfg:
+            nms_cfg = proposals_cfg["nms"]
+            assert isinstance(nms_cfg, dict), "nms config should be a dict"
+        else:
+            nms_cfg = None
+
         batch_size = bbox_pred.size(0)
 
         bbox_pred = bbox_pred.view(-1, 4)
@@ -141,25 +151,30 @@ class RPNHead(BaseModel):
         for proposals, objectness in zip(batch_proposals, batch_objectness):
             # Filter out proposals which are too small
             keep_ids = torch.logical_and(
-                (proposals[:, 2] - proposals[:, 0]) >= nms_cfg["min_bbox_size"],
-                (proposals[:, 3] - proposals[:, 1]) >= nms_cfg["min_bbox_size"],
+                (proposals[:, 2] - proposals[:, 0]) >= proposals_cfg.get("min_box_size", 0),
+                (proposals[:, 3] - proposals[:, 1]) >= proposals_cfg.get("min_box_size", 0),
             )
             proposals = proposals[keep_ids]
             objectness = objectness[keep_ids]
 
             order = torch.argsort(objectness, descending=True)
 
-            if nms_cfg["nms_pre"] > 0:
-                order = order[: nms_cfg["nms_pre"]]
+            if nms_cfg is not None:
+                num_pre_proposals = nms_cfg.get("num_pre_proposals", -1)
+                if num_pre_proposals > 0:
+                    order = order[:num_pre_proposals]
+
             objectness = objectness[order]
             proposals = proposals[order]
 
-            nms_keep_ids = nms(proposals, objectness, nms_cfg["nms_thr"])
+            if nms_cfg is not None:
+                nms_keep_ids = nms(proposals, objectness, nms_cfg.get("iou_thr", 0.5))
+                num_post_proposals = nms_cfg.get("num_post_proposals", -1)
+                if num_post_proposals > 0:
+                    nms_keep_ids = nms_keep_ids[:num_post_proposals]
+                proposals = proposals[nms_keep_ids]
+                objectness = objectness[nms_keep_ids]
 
-            if nms_cfg["nms_post"] > 0:
-                nms_keep_ids = nms_keep_ids[: nms_cfg["nms_post"]]
-            proposals = proposals[nms_keep_ids]
-            objectness = objectness[nms_keep_ids]
             sampled_proposals.append(proposals)
 
         return sampled_proposals

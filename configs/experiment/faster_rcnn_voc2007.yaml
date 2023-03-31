@@ -18,12 +18,12 @@ seed: 12345
 
 trainer:
   min_epochs: 10
-  max_epochs: 20
+  max_epochs: 50
   gradient_clip_val: 10.0
 
 model:
   optimizer:
-    lr: 0.1
+    lr: 0.01
   scheduler:
     _target_: torch.optim.lr_scheduler.CosineAnnealingLR
     _partial_: true

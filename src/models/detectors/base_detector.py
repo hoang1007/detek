@@ -24,6 +24,10 @@ class BaseDetector(BaseModel):
             "img_normalize_stds", torch.tensor(img_normalize_stds).view(1, 3, 1, 1)
         )
 
+    @property
+    def num_classes(self):
+        return len(self.CLASSES)
+
     def img_normalize(self, images: torch.Tensor) -> torch.Tensor:
         """Normalize images.
 
